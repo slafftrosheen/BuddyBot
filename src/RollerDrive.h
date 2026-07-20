@@ -4,7 +4,7 @@
 
 class RollerDrive : public IDriveBase {
 public:
-  explicit RollerDrive(RollerBus* bus);
+  RollerDrive(RollerBus* left, RollerBus* right);
 
   bool begin() override;
   void update() override;
@@ -17,7 +17,8 @@ public:
   DriveMode driveMode() const override;
 
 private:
-  RollerBus* _bus = nullptr;
+  RollerBus* _left = nullptr;
+  RollerBus* _right = nullptr;
   bool _armed = false;
   DriveMode _mode = DriveMode::STOPPED;
   uint32_t _stopAtMs = 0;

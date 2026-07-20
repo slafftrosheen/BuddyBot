@@ -1,3 +1,6 @@
 m5stack/M5Unified @ ^0.1.11
-Wire
+mathieucarbou/ESPAsyncWebServer @ ^3.2.3
 m5stack/M5GFX @ ^0.1.11
+bblanchon/ArduinoJson @ ^7.1.0
+mathieucarbou/AsyncTCP @ ^3.2.4
+Wire

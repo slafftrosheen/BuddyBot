@@ -19,6 +19,9 @@ public:
   void disarmMotors();
   void stopAll();
 
+  bool isArmed() const;
+  ActionId currentAction() const;
+
   void move(DriveMode mode, uint16_t durationMs);
   void action(ActionId actionId);
 
@@ -31,12 +34,20 @@ public:
   void setAutonomyEnabled(bool enabled);
   bool autonomyEnabled() const;
 
+  void rememberDriveCommand(const DriveCommand& cmd);
+  bool lastDriveCommand(DriveCommand& out) const;
+  void clearRememberedDriveCommand();
+
 private:
   PersonaManager* _persona = nullptr;
   RobotHal* _hal = nullptr;
   RobotActions* _actions = nullptr;
   Mood _mood = Mood::IDLE;
   bool _autonomyEnabled = false;
+
+  DriveCommand _lastManualDriveCmd = {DriveMode::STOPPED, 0, 0, 0};
+  uint32_t _lastManualDriveCmdMs = 0;
+  bool _hasSavedCmd = false;
 
   void playMoodSound();
   void playTone(uint16_t frequency, uint16_t durationMs);

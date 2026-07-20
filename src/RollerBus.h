@@ -4,36 +4,25 @@
 
 class RollerBus {
 public:
-  explicit RollerBus(uint8_t addr) : _addr(addr) {}
+  explicit RollerBus(TwoWire& wire, uint8_t address);
 
-  bool begin() {
-    Wire.beginTransmission(_addr);
-    _connected = (Wire.endTransmission() == 0);
-    return _connected;
-  }
+  bool begin();
+  bool isConnected() const;
+  uint8_t address() const;
 
-  bool isConnected() const { return _connected; }
-  uint8_t address() const { return _addr; }
-
-  bool setSpeed(int16_t speed) {
-    if (!_connected) return false;
-    // TODO: replace with official M5 Roller library call.
-    return true;
-  }
-
-  bool setPosition(int32_t pos) {
-    if (!_connected) return false;
-    // TODO: replace with official M5 Roller library call.
-    return true;
-  }
-
-  bool stop() {
-    if (!_connected) return false;
-    // TODO: replace with official M5 Roller library call.
-    return true;
-  }
+  bool arm();
+  bool disarm();
+  bool setSpeedRpm(int16_t rpm);
+  bool setPositionCounts(int32_t counts);
+  bool stop();
+  int16_t lastSpeedRpm() const;
 
 private:
+  TwoWire& _wire;
   uint8_t _addr;
   bool _connected = false;
+  int16_t _lastSpeedRpm = 0;
+
+  bool writeRegister(uint8_t reg, uint8_t value);
+  bool writeRegister32(uint8_t reg, int32_t value);
 };

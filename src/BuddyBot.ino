@@ -16,6 +16,7 @@
 #include "ControlRouter.h"
 #include "AutonomyManager.h"
 #include "SystemStatus.h"
+#include "WifiControl.h"
 
 PersonaManager persona;
 RobotRenderer renderer;
@@ -28,6 +29,7 @@ ControlProtocol protocol;
 ControlRouter router;
 AutonomyManager autonomy;
 SystemStatus systemStatus;
+WifiControl wifiControl;
 
 String serialBuffer;
 
@@ -54,6 +56,10 @@ void setup() {
   autonomy.begin(&robot);
   systemStatus.begin(&robot, &hal);
   router.begin(&robot, &systemStatus);
+
+  if (ENABLE_WIFI_CONTROL) {
+    wifiControl.begin(&router, &robot);
+  }
 
   robot.setMood(Mood::IDLE, false);
 
@@ -127,6 +133,10 @@ void loop() {
 
   robot.update();
   handleAutonomy();
+
+  if (ENABLE_WIFI_CONTROL) {
+    wifiControl.update();
+  }
 
   DriveMode mode = DriveMode::STOPPED;
   bool armed = false;

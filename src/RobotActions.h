@@ -6,6 +6,12 @@
 
 class RobotHal;
 
+enum class ActionDrivePolicy : uint8_t {
+  PRESERVE_DRIVE,
+  OWNS_DRIVE,
+  STOP_DRIVE
+};
+
 class RobotActions {
 public:
   void begin(RobotHal* hal);
@@ -16,10 +22,14 @@ public:
   ActionId currentAction() const;
 
   void start(ActionId action);
-  void cancel();
+  void cancel(bool stopDrive = false);
 
 private:
   RobotHal* _hal = nullptr;
+
+  ActionDrivePolicy drivePolicy(ActionId action) const;
+  uint16_t timeoutFor(ActionId action) const;
+  void finishAction(bool stopDrive);
 
   ActionId _action = ActionId::NONE;
   uint8_t _step = 0;

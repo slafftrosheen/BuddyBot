@@ -14,8 +14,8 @@ void RobotAPI::begin(
 }
 
 void RobotAPI::update() {
-  _hal->update();
-  _actions->update();
+  if (_hal) _hal->update();
+  if (_actions) _actions->update();
 }
 
 Mood RobotAPI::getMood() const {
@@ -97,24 +97,47 @@ void RobotAPI::armMotors() {
 }
 
 void RobotAPI::disarmMotors() {
-  _actions->cancel();
-  if (_hal->drive()) {
+  clearRememberedDriveCommand();
+  _actions->cancel(true);
+  if (_hal && _hal->drive()) {
     _hal->drive()->disarm();
   }
 }
 
 void RobotAPI::stopAll() {
-  _actions->cancel();
-  if (_hal->drive()) {
+  clearRememberedDriveCommand();
+  _actions->cancel(true);
+  if (_hal && _hal->drive()) {
     _hal->drive()->emergencyStop();
   }
 }
 
-void RobotAPI::move(DriveMode mode, uint16_t durationMs) {
-  _actions->cancel();
-  if (!_hal->drive()) return;
+bool RobotAPI::isArmed() const {
+  if (_hal && _hal->drive()) {
+    return _hal->drive()->isArmed();
+  }
+  return false;
+}
 
-  _hal->drive()->drive(DriveCommand{mode, 0, 0, durationMs});
+ActionId RobotAPI::currentAction() const {
+  if (_actions) {
+    return _actions->currentAction();
+  }
+  return ActionId::NONE;
+}
+
+void RobotAPI::move(DriveMode mode, uint16_t durationMs) {
+  _actions->cancel(false);
+  if (!_hal || !_hal->drive()) return;
+
+  DriveCommand cmd = {mode, 0, 0, durationMs};
+  if (mode != DriveMode::STOPPED) {
+    rememberDriveCommand(cmd);
+  } else {
+    clearRememberedDriveCommand();
+  }
+
+  _hal->drive()->drive(cmd);
 }
 
 void RobotAPI::action(ActionId actionId) {
@@ -122,9 +145,17 @@ void RobotAPI::action(ActionId actionId) {
 }
 
 void RobotAPI::accessory(uint8_t index, bool active) {
-  // Placeholder: wire to HAL accessory interfaces when configured.
-  (void)index;
-  (void)active;
+  if (!_hal) return;
+  IJoint* acc = _hal->accessory(index);
+  if (!acc) {
+    Serial.printf("ERR: Accessory %u not configured or invalid\n", index);
+    return;
+  }
+  if (active) {
+    acc->moveTo(ACCESSORY_ACTIVE_DEG);
+  } else {
+    acc->rest();
+  }
 }
 
 RangeReading RobotAPI::rangeReading() const {
@@ -149,4 +180,22 @@ void RobotAPI::setAutonomyEnabled(bool enabled) {
 
 bool RobotAPI::autonomyEnabled() const {
   return _autonomyEnabled;
+}
+
+void RobotAPI::rememberDriveCommand(const DriveCommand& cmd) {
+  _lastManualDriveCmd = cmd;
+  _lastManualDriveCmdMs = millis();
+  _hasSavedCmd = true;
+}
+
+bool RobotAPI::lastDriveCommand(DriveCommand& out) const {
+  if (!_hasSavedCmd) return false;
+  out = _lastManualDriveCmd;
+  return true;
+}
+
+void RobotAPI::clearRememberedDriveCommand() {
+  _hasSavedCmd = false;
+  _lastManualDriveCmd = {DriveMode::STOPPED, 0, 0, 0};
+  _lastManualDriveCmdMs = millis();
 }
