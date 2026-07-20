@@ -58,7 +58,7 @@ void setup() {
   router.begin(&robot, &systemStatus);
 
   if (ENABLE_WIFI_CONTROL) {
-    wifiControl.begin(&router, &robot);
+    wifiControl.begin(&router, &robot, &systemStatus);
   }
 
   robot.setMood(Mood::IDLE, false);
@@ -136,6 +136,8 @@ void loop() {
 
   if (ENABLE_WIFI_CONTROL) {
     wifiControl.update();
+    renderer.setWifiStatus(ENABLE_WIFI_CONTROL, systemStatus.getWifiSsid(), systemStatus.getWifiIp(), systemStatus.getWifiHasController());
+    renderer.setPairingCode(systemStatus.getPairingCode());
   }
 
   DriveMode mode = DriveMode::STOPPED;

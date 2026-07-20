@@ -170,11 +170,19 @@ constexpr bool WIFI_START_SOFT_AP = true;
 constexpr bool WIFI_ENABLE_STA = false;
 
 constexpr char WIFI_AP_SSID[] = "BuddyBot-Control";
-constexpr char WIFI_AP_PASSWORD[] = "change-this-before-use";
+constexpr char WIFI_AP_PASSWORD[] = "BuddyBotSecure123";
+static_assert(sizeof(WIFI_AP_PASSWORD) >= 13, "WIFI_AP_PASSWORD must be at least 12 characters long");
+
 constexpr uint16_t WIFI_HTTP_PORT = 80;
 constexpr char WIFI_WS_PATH[] = "/ws";
 
+constexpr size_t WIFI_MAX_WS_FRAME_BYTES = 256;
+constexpr uint8_t WIFI_MAX_COMMANDS_PER_SECOND = 20;
+constexpr uint8_t WIFI_MAX_PAIR_ATTEMPTS_PER_MINUTE = 5;
+constexpr uint16_t WIFI_TELEMETRY_INTERVAL_MS = 250;
+constexpr uint16_t WIFI_CONTROLLER_LEASE_MS = 10000;
+
 constexpr uint16_t WIFI_DRIVE_KEEPALIVE_MS = 150;
 constexpr uint16_t WIFI_DRIVE_COMMAND_DURATION_MS = 250;
+constexpr uint16_t WIFI_DRIVE_WATCHDOG_MS = 350;
 constexpr uint8_t WIFI_MAX_CLIENTS = 2;
-constexpr char WIFI_UI_PIN[] = "1234";

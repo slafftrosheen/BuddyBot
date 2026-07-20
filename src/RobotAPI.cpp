@@ -199,3 +199,8 @@ void RobotAPI::clearRememberedDriveCommand() {
   _lastManualDriveCmd = {DriveMode::STOPPED, 0, 0, 0};
   _lastManualDriveCmdMs = millis();
 }
+
+void RobotAPI::recordSafetyStop(const char* reason) {
+  _lastSafetyStopMs = millis();
+  _lastSafetyStopReason = reason;
+}

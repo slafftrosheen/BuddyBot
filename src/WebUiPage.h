@@ -72,9 +72,9 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
 <body>
   <div id="loginModal">
     <div class="panel">
-      <h2>Take Control</h2>
-      <p>Enter PIN to take control of BuddyBot</p>
-      <input type="number" id="pinInput" placeholder="PIN" pattern="[0-9]*">
+      <h2>Pair Controller</h2>
+      <p>Enter the code shown on BuddyBot's screen</p>
+      <input type="text" id="pinInput" placeholder="1234 5678">
       <button class="btn" style="width: 100%; background: var(--accent); color: #000;" onclick="submitPin()">Submit</button>
       <button class="btn" style="width: 100%; margin-top: 10px;" onclick="closeModal()">Close (View Only)</button>
     </div>
@@ -155,9 +155,9 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
 <script>
 let ws;
 let isController = false;
+let sessionToken = "";
 let driveInterval = null;
 let currentDriveMode = null;
-let pin = "";
 let accState = {1: false, 2: false, 3: false};
 let msgId = 1;
 
@@ -173,9 +173,9 @@ function logMsg(msg, isErr=false, isOk=false) {
 function openModal() { document.getElementById('loginModal').style.display = 'flex'; }
 function closeModal() { document.getElementById('loginModal').style.display = 'none'; }
 function submitPin() {
-  pin = document.getElementById('pinInput').value;
+  const pin = document.getElementById('pinInput').value;
   closeModal();
-  send({type: "auth", pin: pin});
+  send({type: "pair", code: pin});
 }
 
 function connect() {
@@ -184,12 +184,13 @@ function connect() {
     document.getElementById('wsBadge').textContent = 'Connected';
     document.getElementById('wsBadge').className = 'status-badge connected';
     logMsg('WebSocket connected');
-    if (pin) send({type: "auth", pin: pin});
+    send({type: "hello"});
   };
   ws.onclose = () => {
     document.getElementById('wsBadge').textContent = 'Disconnected';
     document.getElementById('wsBadge').className = 'status-badge disconnected';
     isController = false;
+    sessionToken = "";
     updateRoleUI();
     logMsg('WebSocket disconnected', true);
     setTimeout(connect, 2000);
@@ -199,13 +200,21 @@ function connect() {
       const data = JSON.parse(e.data);
       if (data.type === 'telemetry') {
         updateTelemetry(data);
+      } else if (data.type === 'events') {
+        data.events.forEach(ev => {
+          logMsg(`[SYS] ${ev.sev}: ${ev.code}`, ev.sev === "WARN" || ev.sev === "ERROR", false);
+        });
       } else if (data.type === 'ack') {
-        logMsg(`Ack ID ${data.id}: ${data.message || (data.ok ? "OK" : "Failed")}`, !data.ok, data.ok);
-        if (data.auth !== undefined) {
-          isController = data.auth;
+        if (data.token) {
+          sessionToken = data.token;
+          isController = true;
           updateRoleUI();
-          if (isController) logMsg("Successfully took control", false, true);
+          logMsg("Successfully paired and took control", false, true);
+        } else {
+          logMsg(`Ack ID ${data.id}: OK`, false, true);
         }
+      } else if (data.type === 'error') {
+        logMsg(`Error ID ${data.id}: ${data.code}`, true, false);
       }
     } catch(err) {}
   };
@@ -215,6 +224,7 @@ function send(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     obj.v = 1;
     obj.id = msgId++;
+    if (sessionToken) obj.token = sessionToken;
     ws.send(JSON.stringify(obj));
   }
 }
@@ -286,6 +296,21 @@ document.querySelectorAll('.dpad .btn').forEach(btn => {
     btn.onpointerleave = (e) => { e.preventDefault(); stopDriveLoop(); };
   }
 });
+
+// Safety: release control if browser loses focus
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && isController) sendStop();
+});
+window.addEventListener("blur", () => {
+  if (isController) sendStop();
+});
+
+// Lease keepalive
+setInterval(() => {
+  if (isController && ws && ws.readyState === WebSocket.OPEN) {
+    send({type: "ping"});
+  }
+}, 5000);
 
 connect();
 </script>

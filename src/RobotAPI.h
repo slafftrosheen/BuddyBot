@@ -38,6 +38,10 @@ public:
   bool lastDriveCommand(DriveCommand& out) const;
   void clearRememberedDriveCommand();
 
+  void recordSafetyStop(const char* reason);
+  uint32_t lastSafetyStopMs() const { return _lastSafetyStopMs; }
+  const char* lastSafetyStopReason() const { return _lastSafetyStopReason; }
+
 private:
   PersonaManager* _persona = nullptr;
   RobotHal* _hal = nullptr;
@@ -48,6 +52,9 @@ private:
   DriveCommand _lastManualDriveCmd = {DriveMode::STOPPED, 0, 0, 0};
   uint32_t _lastManualDriveCmdMs = 0;
   bool _hasSavedCmd = false;
+
+  uint32_t _lastSafetyStopMs = 0;
+  const char* _lastSafetyStopReason = "";
 
   void playMoodSound();
   void playTone(uint16_t frequency, uint16_t durationMs);

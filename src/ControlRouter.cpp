@@ -9,6 +9,29 @@ void ControlRouter::begin(RobotAPI* robot, SystemStatus* status) {
 bool ControlRouter::execute(const RobotCommand& cmd) {
   if (_robot == nullptr) return false;
 
+  bool isTelemetryQuery = (
+    cmd.kind == CommandKind::RANGE_QUERY ||
+    cmd.kind == CommandKind::PROFILE_LIST ||
+    cmd.kind == CommandKind::PROFILE_SHOW ||
+    cmd.kind == CommandKind::STATUS_QUERY
+  );
+
+  if (!isTelemetryQuery) {
+    _commandEpoch++;
+  }
+
+  bool isIntervention = false;
+  if (cmd.kind == CommandKind::STOP || cmd.kind == CommandKind::DISARM) {
+    isIntervention = true;
+  } else if (!isTelemetryQuery && cmd.source != ControlSource::WIFI) {
+    // Any non-WIFI active command supersedes queued WIFI commands
+    isIntervention = true;
+  }
+
+  if (isIntervention) {
+    _lastInterventionEpoch = _commandEpoch;
+  }
+
   switch (cmd.kind) {
     case CommandKind::ARM:
       _robot->armMotors();

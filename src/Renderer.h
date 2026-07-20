@@ -17,6 +17,9 @@ public:
     DriveMode driveMode
   );
 
+  void setWifiStatus(bool enabled, const char* ssid, const char* ip, bool hasController);
+  void setPairingCode(const char* code);
+
 private:
   M5Canvas _canvas = M5Canvas(&M5.Display);
 
@@ -62,7 +65,15 @@ private:
     uint16_t accent
   );
 
+  void drawWifiOverlay(uint16_t accent);
+
   void drawDriveIndicator(DriveMode driveMode, uint16_t accent);
 
   int clampInt(int value, int minimum, int maximum);
+
+  bool _wifiEnabled = false;
+  char _wifiSsid[32] = {0};
+  char _wifiIp[16] = {0};
+  bool _wifiHasController = false;
+  char _pairingCode[16] = {0};
 };

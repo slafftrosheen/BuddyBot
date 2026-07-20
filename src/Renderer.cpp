@@ -148,6 +148,8 @@ void RobotRenderer::draw(
 
   drawStatus(persona, mood, motorsArmed, driveMode, accent);
 
+  drawWifiOverlay(accent);
+
   // Send one finished frame to the LCD: reduced visible flicker.
   _canvas.pushSprite(0, 0);
 }
@@ -196,8 +198,13 @@ void RobotRenderer::drawHeader(
 
   // Decorative battery/activity module.
   _canvas.drawRoundRect(103, 37, 18, 8, 2, accent);
-  _canvas.fillRect(121, 40, 2, 3, accent);
-  _canvas.fillRect(106, 40, 10, 3, accent);
+  
+  if (_wifiHasController) {
+    _canvas.fillRect(121, 40, 2, 3, accent);
+    _canvas.fillRect(106, 40, 10, 3, accent);
+  } else if (_wifiEnabled) {
+    _canvas.drawRect(106, 40, 10, 3, accent);
+  }
 }
 
 // ------------------------------------------------------------
@@ -489,10 +496,12 @@ void RobotRenderer::drawStatus(
     UI_PANEL
   );
 
-  if (motorsArmed) {
+  if (!ALLOW_MOTOR_ARMING) {
+    _canvas.drawString("LOCKED (FIRMWARE)", 67, 223);
+  } else if (motorsArmed) {
     _canvas.drawString("MOTORS ARMED", 67, 223);
   } else {
-    _canvas.drawString("SAFE SCREEN MODE", 67, 223);
+    _canvas.drawString("DISARMED", 67, 223);
   }
 }
 
@@ -561,4 +570,44 @@ int RobotRenderer::clampInt(
   if (value < minimum) return minimum;
   if (value > maximum) return maximum;
   return value;
+}
+
+void RobotRenderer::setWifiStatus(bool enabled, const char* ssid, const char* ip, bool hasController) {
+  _wifiEnabled = enabled;
+  if (ssid) strncpy(_wifiSsid, ssid, sizeof(_wifiSsid) - 1);
+  if (ip) strncpy(_wifiIp, ip, sizeof(_wifiIp) - 1);
+  _wifiHasController = hasController;
+}
+
+void RobotRenderer::setPairingCode(const char* code) {
+  if (code) {
+    strncpy(_pairingCode, code, sizeof(_pairingCode) - 1);
+    _pairingCode[sizeof(_pairingCode) - 1] = '\0';
+  } else {
+    _pairingCode[0] = '\0';
+  }
+}
+
+void RobotRenderer::drawWifiOverlay(uint16_t accent) {
+  if (!_wifiEnabled) return;
+  if (_pairingCode[0] == '\0') return; // Only show while pairing is available
+
+  _canvas.fillRoundRect(10, 70, 115, 100, 5, UI_PANEL_DARK);
+  _canvas.drawRoundRect(10, 70, 115, 100, 5, accent);
+
+  _canvas.setTextDatum(middle_center);
+  _canvas.setTextSize(1);
+  _canvas.setTextColor(UI_WHITE);
+
+  _canvas.drawString("Wi-Fi AP", 67, 85);
+  _canvas.setTextColor(accent);
+  _canvas.drawString(_wifiSsid, 67, 100);
+  _canvas.drawString(_wifiIp, 67, 115);
+
+  _canvas.setTextColor(UI_WHITE);
+  _canvas.drawString("PAIRING CODE", 67, 135);
+  
+  _canvas.setTextSize(2);
+  _canvas.setTextColor(UI_WHITE);
+  _canvas.drawString(_pairingCode, 67, 155);
 }

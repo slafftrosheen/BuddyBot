@@ -7,9 +7,20 @@
 class WebControlProtocol {
 public:
   WebControlProtocol();
-  bool parseCommand(const char* jsonStr, RobotCommand& outCmd, bool& isAuthCmd, String& outPin, uint32_t& outMsgId);
-  String generateAck(uint32_t msgId, bool ok, const String& message, bool isArmed, int authFlag = -1);
-  String generateTelemetry(const TelemetryData& t);
+  bool parseCommand(
+    const char* jsonStr, size_t len,
+    RobotCommand& outCmd,
+    String& outType,
+    String& outToken,
+    String& outCode,
+    uint32_t& outMsgId,
+    String& outErrorCode
+  );
+
+  String generateAck(uint32_t msgId, bool ok, const String& codeOrMessage, uint32_t revision);
+  String generateError(uint32_t msgId, const String& code);
+  String generateTelemetry(const RobotTelemetry& t);
+  String generateEventLog(const EventLogEntry* entries, size_t count);
 
 private:
   DriveMode parseDriveMode(const char* modeStr);
