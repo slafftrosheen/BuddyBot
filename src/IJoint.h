@@ -6,7 +6,7 @@ public:
   virtual ~IJoint() = default;
   virtual bool begin() = 0;
   virtual bool isConnected() const = 0;
-  virtual void moveTo(int16_t value) = 0;
+  virtual void moveTo(int16_t value, uint16_t durationMs = 0) = 0;
   virtual int16_t current() const = 0;
   virtual void rest() = 0;
 };

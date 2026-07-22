@@ -2,9 +2,17 @@
 #include "IDriveBase.h"
 #include "Servo8Bus.h"
 
+struct ServoDriveLayout {
+  bool isFourWheel;
+  ServoRole frontLeft;
+  ServoRole rearLeft;
+  ServoRole frontRight;
+  ServoRole rearRight;
+};
+
 class ServoDrive : public IDriveBase {
 public:
-  explicit ServoDrive(Servo8Bus* bus);
+  ServoDrive(Servo8Bus* bus, const ServoDriveLayout& layout);
 
   bool begin() override;
   void update() override;
@@ -16,11 +24,18 @@ public:
   void drive(const DriveCommand& cmd) override;
   DriveMode driveMode() const override;
 
+  bool isFourWheel() const;
+
 private:
   Servo8Bus* _bus = nullptr;
+  ServoDriveLayout _layout;
   bool _armed = false;
   DriveMode _mode = DriveMode::STOPPED;
   uint32_t _stopAtMs = 0;
 
-  void wheels(uint16_t leftUs, uint16_t rightUs);
+  void setLeftDrive(bool forward);
+  void setRightDrive(bool forward);
+  void stopDrive();
+  
+  void applyDrivePulse(ServoRole role, bool forward);
 };

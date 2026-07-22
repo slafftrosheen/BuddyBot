@@ -24,7 +24,22 @@ enum class CommandKind : uint8_t {
   PROFILE_LIST,
   PROFILE_SHOW,
   STATUS_QUERY,
-  AUTONOMY_SET
+  CTRL_SENSOR_STATUS,
+  CTRL_SAFETY_STATUS,
+  CTRL_AUTONOMY_STATUS,
+  AUTONOMY_SET,
+  PLAY_EXPRESSION,
+  SET_ATTENTION,
+  CTRL_WIFI_STATUS,
+  CTRL_WIFI_ON,
+  CTRL_WIFI_OFF,
+  CTRL_WIFI_PAIR,
+  SERVO_TEST,
+  JOINT_MOVE,
+  JOINT_REST,
+  VERSION,
+  DIAG_BOOT,
+  PRINT_EVENTS
 };
 
 struct RobotCommand {
@@ -38,4 +53,10 @@ struct RobotCommand {
   uint8_t index = 0;
   bool flag = false;
   uint16_t durationMs = 0;
+  ExpressionId expression = ExpressionId::NONE;
+  AttentionTarget attention = AttentionTarget::CENTER;
+  
+  // For diagnostics / joint
+  int16_t arg1 = 0;
+  int16_t arg2 = 0;
 };

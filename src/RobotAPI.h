@@ -1,9 +1,12 @@
 #pragma once
-#pragma once
 #include "Types.h"
 #include "Persona.h"
 #include "RobotHal.h"
 #include "RobotActions.h"
+#include "ExpressionEngine.h"
+#include "ActuatorState.h"
+#include "ServoDiagnostics.h"
+#include "ObstacleSafety.h"
 
 class RobotAPI {
 public:
@@ -11,9 +14,11 @@ public:
   void update();
 
   Mood getMood() const;
+  Mood baseMood() const;
   void setMood(Mood mood, bool playSound = true);
   void nextMood();
   void nextPersona();
+  const char* personaName() const;
 
   void armMotors();
   void disarmMotors();
@@ -22,10 +27,24 @@ public:
   bool isArmed() const;
   ActionId currentAction() const;
 
-  void move(DriveMode mode, uint16_t durationMs);
+  bool driveAvailable() const;
+  bool fourWheelDriveConfigured() const;
+  bool manipulatorAvailable(ServoRole role) const;
+  
+  ActuatorCapabilities actuatorCapabilities() const;
+  ManipulatorState manipulatorState(ManipulatorId id) const;
+
+  void moveJointTo(ServoRole role, int16_t angle, uint16_t durationMs = 500);
+  void restJoint(ServoRole role);
+  void setAccessoryPosition(uint8_t index, bool active);
+
+  bool move(DriveMode mode, uint16_t durationMs);
   void action(ActionId actionId);
 
-  void accessory(uint8_t index, bool active);
+  void playExpression(ExpressionId expression, uint16_t durationMs = 0);
+  void setAttention(AttentionTarget target);
+  ExpressionId expression() const;
+  const ExpressionEngine& expressionEngine() const;
   RangeReading rangeReading() const;
   bool obstacleDetected() const;
 
@@ -38,14 +57,22 @@ public:
   bool lastDriveCommand(DriveCommand& out) const;
   void clearRememberedDriveCommand();
 
-  void recordSafetyStop(const char* reason);
-  uint32_t lastSafetyStopMs() const { return _lastSafetyStopMs; }
-  const char* lastSafetyStopReason() const { return _lastSafetyStopReason; }
+  const ObstacleSafetyStatus& obstacleSafetyStatus() const;
+  bool forwardMotionAllowed() const;
+  SafetyStopReason lastSafetyStopReason() const;
+  
+  RangeSensorHealth rangeSensorHealth() const;
+  uint16_t rangeConsecutiveInvalid() const;
+
+  ServoDiagnostics* diagnostics();
 
 private:
   PersonaManager* _persona = nullptr;
   RobotHal* _hal = nullptr;
   RobotActions* _actions = nullptr;
+  ExpressionEngine _expressions;
+  ServoDiagnostics _diagnostics;
+  ObstacleSafety _safety;
   Mood _mood = Mood::IDLE;
   bool _autonomyEnabled = false;
 

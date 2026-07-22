@@ -5,75 +5,65 @@
 #include "Config.h"
 #include "Types.h"
 #include "Persona.h"
+#include "ExpressionEngine.h"
+#include "PersonaParticles.h"
+#include "ObstacleSafety.h"
+
+struct RenderState {
+  const PersonaProfile* persona;
+  Mood mood;
+  ExpressionId expression;
+  ActionId action;
+  bool motorsArmed;
+  bool motorAllowedByFirmware;
+  DriveMode driveMode;
+  bool wifiEnabled;
+  bool wifiControllerConnected;
+  bool pairingAvailable;
+  const char* pairingCode;
+  const char* apSsid;
+  const char* apIp;
+  bool rangeValid;
+  uint16_t rangeMm;
+  bool obstacleDetected;
+  bool autonomyEnabled;
+  uint8_t batteryPercent;
+  bool batteryValid;
+  ObstacleSafetyState safetyState;
+};
 
 class RobotRenderer {
 public:
   void begin();
 
-  void update(
-    const PersonaManager& persona,
-    Mood mood,
-    bool motorsArmed,
-    DriveMode driveMode
-  );
-
-  void setWifiStatus(bool enabled, const char* ssid, const char* ip, bool hasController);
-  void setPairingCode(const char* code);
+  void update(const RenderState& state, const ExpressionEngine& expressions);
 
 private:
   M5Canvas _canvas = M5Canvas(&M5.Display);
 
   uint32_t _lastFrameMs = 0;
-  uint32_t _nextBlinkMs = 0;
-  uint32_t _blinkStartedMs = 0;
-  uint32_t _nextLookMs = 0;
+  
+  // Hysteresis states
+  uint8_t _lastBatteryPercent = 0;
+  bool _lastBatteryValid = false;
+  uint16_t _lastRangeMm = 0;
+  bool _lastRangeValid = false;
 
-  bool _blinking = false;
+  PersonaParticlePool _particles;
 
-  int _pupilX = 0;
-  int _pupilY = 0;
-  int _targetPupilX = 0;
-  int _targetPupilY = 0;
-
-  void draw(
-    const PersonaManager& persona,
-    Mood mood,
-    bool motorsArmed,
-    DriveMode driveMode
-  );
-
-  void drawFrame(uint16_t accent);
-  void drawHeader(const PersonaProfile& profile, uint16_t accent);
-  void drawAccessory(const PersonaProfile& profile);
-
-  void drawEye(
-    int centerX,
-    int centerY,
-    float openAmount,
-    uint16_t accent
-  );
-
-  void drawBrows(Mood mood, uint16_t accent);
-  void drawCheeks(Mood mood, int bounce, uint16_t accent);
-  void drawMouth(Mood mood, uint16_t accent);
-
-  void drawStatus(
-    const PersonaManager& persona,
-    Mood mood,
-    bool motorsArmed,
-    DriveMode driveMode,
-    uint16_t accent
-  );
-
-  void drawWifiOverlay(uint16_t accent);
-
-  void drawDriveIndicator(DriveMode driveMode, uint16_t accent);
+  void draw(const RenderState& state, const ExpressionEngine& expressions);
+  
+  void drawSystemRail(const RenderState& state);
+  void drawPersonaBadge(const RenderState& state);
+  void drawFace(const RenderState& state, const ExpressionEngine& expressions);
+  void drawEye(int centerX, int centerY, float openAmount, int8_t pupilOffsetX, int8_t pupilOffsetY, const RenderState& state);
+  void drawBrows(int8_t tiltLeft, int8_t tiltRight, const RenderState& state);
+  void drawMouth(int8_t openness, const RenderState& state);
+  void drawCheeks(uint8_t intensity, int bounce, const RenderState& state);
+  
+  void drawExpressionOverlays(const RenderState& state, const ExpressionEngine& expressions);
+  void drawMessagePanel(const RenderState& state);
+  void drawPairingOverlay(const RenderState& state);
 
   int clampInt(int value, int minimum, int maximum);
-
-  bool _wifiEnabled = false;
-  char _wifiSsid[32] = {0};
-  char _wifiIp[16] = {0};
-  bool _wifiHasController = false;
-  char _pairingCode[16] = {0};
 };

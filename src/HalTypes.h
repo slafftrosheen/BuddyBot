@@ -26,5 +26,5 @@ struct JointLimits {
 struct RangeReading {
   bool valid = false;
   uint16_t distanceMm = 0;
-  uint32_t timestampMs = 0;
+  uint32_t sampleTimeMs = 0;
 };

@@ -95,6 +95,10 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
         <span>Range</span>
         <span id="rangeBadge">-- mm</span>
       </div>
+      <div class="badge-row" style="margin-top: 8px;">
+        <span>Firmware</span>
+        <span id="firmwareBadge">--</span>
+      </div>
     </div>
 
     <button class="btn stop" id="btnStop" onpointerdown="sendStop()">EMERGENCY STOP</button>
@@ -153,13 +157,22 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
   </div>
 
 <script>
-let ws;
-let isController = false;
-let sessionToken = "";
-let driveInterval = null;
-let currentDriveMode = null;
+const session = {
+  ws: null,
+  connected: false,
+  role: "disconnected", // disconnected | observer | pairing | controller | busy
+  token: "",
+  nextRequestId: 1,
+  activeDriveTimer: 0,
+  heldDriveMode: "",
+  telemetryRevision: 0,
+  hasDrive: true,
+  hasManipulators: true,
+  lastActionRunning: false,
+  forwardMotionBlocked: false
+};
+
 let accState = {1: false, 2: false, 3: false};
-let msgId = 1;
 
 const logEl = document.getElementById('log');
 function logMsg(msg, isErr=false, isOk=false) {
@@ -170,76 +183,185 @@ function logMsg(msg, isErr=false, isOk=false) {
   logEl.prepend(div);
 }
 
-function openModal() { document.getElementById('loginModal').style.display = 'flex'; }
+function updateRoleUI() {
+  const badge = document.getElementById('roleBadge');
+  const authBtn = document.getElementById('authBtn');
+  
+  if (session.role === 'controller') {
+    badge.textContent = 'Controller';
+    badge.style.color = 'var(--success)';
+    authBtn.style.display = 'none';
+  } else if (session.role === 'pairing') {
+    badge.textContent = 'Pairing Required';
+    badge.style.color = 'var(--accent)';
+    authBtn.style.display = 'inline-block';
+  } else if (session.role === 'busy') {
+    badge.textContent = 'Controller Busy';
+    badge.style.color = 'var(--danger)';
+    authBtn.style.display = 'none';
+  } else {
+    badge.textContent = 'Observer';
+    badge.style.color = 'inherit';
+    authBtn.style.display = 'inline-block';
+  }
+  
+  // Disable privileged controls if not controller, or if an action is running
+  const isController = session.role === 'controller';
+  const isActionRunning = session.lastActionRunning;
+  
+  const driveControls = document.querySelectorAll('.dpad button, #btnArm');
+  driveControls.forEach(btn => {
+    const active = isController && session.hasDrive && !isActionRunning;
+    if (btn.dataset.mode === 'forward' && session.forwardMotionBlocked) {
+      btn.disabled = true;
+      btn.style.opacity = '0.3';
+      btn.style.border = '1px solid var(--danger)';
+    } else {
+      btn.disabled = !active;
+      btn.style.opacity = active ? '1' : '0.5';
+      btn.style.border = '1px solid var(--border)';
+    }
+  });
+  
+  const actionControls = document.querySelectorAll('.grid-3 button');
+  actionControls.forEach(btn => {
+    const active = isController && (!isActionRunning || btn.onclick.toString().includes('sendMood') || btn.onclick.toString().includes('toggleAccessory'));
+    btn.disabled = !active;
+    btn.style.opacity = active ? '1' : '0.5';
+  });
+}
+
+function openModal() { 
+  if (session.role === 'pairing' || session.role === 'observer') {
+    document.getElementById('loginModal').style.display = 'flex'; 
+  }
+}
 function closeModal() { document.getElementById('loginModal').style.display = 'none'; }
 function submitPin() {
-  const pin = document.getElementById('pinInput').value;
+  const pin = document.getElementById('pinInput').value.replace(/\s/g, '');
   closeModal();
   send({type: "pair", code: pin});
 }
 
 function connect() {
-  ws = new WebSocket(`ws://${window.location.host}/ws`);
-  ws.onopen = () => {
+  session.ws = new WebSocket(`ws://${window.location.host}/ws`);
+  session.ws.onopen = () => {
+    session.connected = true;
     document.getElementById('wsBadge').textContent = 'Connected';
     document.getElementById('wsBadge').className = 'status-badge connected';
     logMsg('WebSocket connected');
     send({type: "hello"});
   };
-  ws.onclose = () => {
+  session.ws.onclose = () => {
+    session.connected = false;
     document.getElementById('wsBadge').textContent = 'Disconnected';
     document.getElementById('wsBadge').className = 'status-badge disconnected';
-    isController = false;
-    sessionToken = "";
+    session.role = "disconnected";
+    session.token = "";
+    stopDriveLoop();
     updateRoleUI();
     logMsg('WebSocket disconnected', true);
     setTimeout(connect, 2000);
   };
-  ws.onmessage = (e) => {
+  session.ws.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
       if (data.type === 'telemetry') {
+        session.telemetryRevision = data.revision;
+        session.hasDrive = data.hasDrive;
+        session.hasManipulators = data.hasManipulators;
+        session.lastActionRunning = data.actionRunning;
+        session.forwardMotionBlocked = data.forwardMotionBlocked;
         updateTelemetry(data);
+        if (session.role === 'disconnected' || session.role === 'observer') {
+          if (data.controllerPresent) session.role = 'busy';
+          else if (data.pairingAvailable) session.role = 'pairing';
+          else session.role = 'observer';
+          updateRoleUI();
+        }
       } else if (data.type === 'events') {
         data.events.forEach(ev => {
           logMsg(`[SYS] ${ev.sev}: ${ev.code}`, ev.sev === "WARN" || ev.sev === "ERROR", false);
         });
       } else if (data.type === 'ack') {
-        if (data.token) {
-          sessionToken = data.token;
-          isController = true;
-          updateRoleUI();
-          logMsg("Successfully paired and took control", false, true);
-        } else {
-          logMsg(`Ack ID ${data.id}: OK`, false, true);
-        }
+        // Handled silently
+      } else if (data.type === 'paired') {
+        session.token = data.token;
+        session.role = 'controller';
+        updateRoleUI();
+        logMsg("Successfully paired and took control", false, true);
       } else if (data.type === 'error') {
-        logMsg(`Error ID ${data.id}: ${data.code}`, true, false);
+        logMsg(`Error: ${data.code}`, true, false);
+        if (data.code === 'controller_busy') {
+          session.role = 'busy';
+          updateRoleUI();
+        } else if (data.code === 'pairing_failed') {
+          logMsg("Pairing failed", true);
+        } else if (data.code === 'not_controller' || data.code === 'bad_token' || data.code === 'superseded' || data.code === 'motors_locked') {
+          stopDriveLoop();
+        } else if (data.code === 'rate_limited') {
+          // Disable pairing for 60s
+          const btn = document.querySelector('#loginModal .btn');
+          btn.disabled = true;
+          let timeLeft = 60;
+          btn.textContent = `Wait ${timeLeft}s`;
+          const intv = setInterval(() => {
+            timeLeft--;
+            btn.textContent = `Wait ${timeLeft}s`;
+            if (timeLeft <= 0) {
+              clearInterval(intv);
+              btn.disabled = false;
+              btn.textContent = "Submit";
+            }
+          }, 1000);
+        }
       }
     } catch(err) {}
   };
 }
 
 function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
+  if (session.ws && session.connected) {
     obj.v = 1;
-    obj.id = msgId++;
-    if (sessionToken) obj.token = sessionToken;
-    ws.send(JSON.stringify(obj));
+    obj.id = session.nextRequestId++;
+    if (session.token) obj.token = session.token;
+    session.ws.send(JSON.stringify(obj));
   }
 }
 
 function updateTelemetry(t) {
-  document.getElementById('rangeBadge').textContent = t.rangeMm ? `${t.rangeMm} mm` : '--';
-  document.getElementById('armedStatus').textContent = t.isArmed ? 'ARMED' : 'Disarmed';
-  document.getElementById('armedStatus').style.color = t.isArmed ? 'var(--danger)' : 'var(--text-dim)';
-  document.getElementById('motorPanel').className = t.isArmed ? 'panel armed' : 'panel disarmed';
-}
-
-function updateRoleUI() {
-  document.getElementById('roleBadge').textContent = isController ? 'Controller' : 'Observer';
-  document.getElementById('roleBadge').style.color = isController ? 'var(--success)' : 'inherit';
-  document.getElementById('authBtn').style.display = isController ? 'none' : 'inline-block';
+  let rangeStr = t.rangeValid ? `${t.rangeMm} mm` : '-- mm';
+  if (t.obstacleSafetyState) {
+    rangeStr += ` (${t.obstacleSafetyState})`;
+    if (t.obstacleSafetyState === 'blocked') {
+      document.getElementById('rangeBadge').style.color = 'var(--danger)';
+    } else if (t.obstacleSafetyState === 'caution') {
+      document.getElementById('rangeBadge').style.color = 'orange';
+    } else {
+      document.getElementById('rangeBadge').style.color = 'var(--success)';
+    }
+  }
+  document.getElementById('rangeBadge').textContent = rangeStr;
+  document.getElementById('armedStatus').textContent = t.motorsArmed ? 'ARMED' : 'Disarmed';
+  document.getElementById('armedStatus').style.color = t.motorsArmed ? 'var(--danger)' : 'var(--text-dim)';
+  document.getElementById('motorPanel').className = t.motorsArmed ? 'panel armed' : 'panel disarmed';
+  
+  if (!t.hasDrive) {
+    document.getElementById('motorPanel').style.display = 'none';
+  } else {
+    document.getElementById('motorPanel').style.display = 'block';
+  }
+  
+  const actionPanel = document.querySelectorAll('.panel')[2]; // Actions panel is the 3rd panel
+  if (actionPanel && actionPanel.querySelector('h2').textContent === 'Actions') {
+    actionPanel.style.display = t.hasManipulators ? 'block' : 'none';
+  }
+  
+  if (t.firmwareVersion) {
+    document.getElementById('firmwareBadge').textContent = `${t.firmwareVersion} (${t.firmwareChannel})`;
+  }
+  
+  updateRoleUI();
 }
 
 function sendStop() {
@@ -252,14 +374,8 @@ function toggleArm() {
   send({type: willArm ? "arm" : "disarm"});
 }
 
-function sendAction(actionStr) {
-  send({type: "action", action: actionStr});
-}
-
-function sendMood(moodStr) {
-  send({type: "mood", mood: moodStr});
-}
-
+function sendAction(actionStr) { send({type: "action", action: actionStr}); }
+function sendMood(moodStr) { send({type: "mood", mood: moodStr}); }
 function toggleAccessory(idx) {
   accState[idx] = !accState[idx];
   send({type: "accessory", index: idx, active: accState[idx]});
@@ -267,47 +383,80 @@ function toggleAccessory(idx) {
 
 // Drive logic
 function startDriveLoop(mode) {
-  if (!isController) return;
-  currentDriveMode = mode;
+  if (session.role !== 'controller') return;
+  stopDriveLoop();
+  session.heldDriveMode = mode;
   sendDriveCmd();
-  if (driveInterval) clearInterval(driveInterval);
-  driveInterval = setInterval(sendDriveCmd, 150);
+  session.activeDriveTimer = setInterval(sendDriveCmd, 150);
 }
 
 function sendDriveCmd() {
-  if (!currentDriveMode) return;
-  send({type: "move", mode: currentDriveMode, durationMs: 250});
+  if (!session.heldDriveMode) return;
+  send({type: "move", mode: session.heldDriveMode, durationMs: 250});
 }
 
 function stopDriveLoop() {
-  if (driveInterval) clearInterval(driveInterval);
-  driveInterval = null;
-  if (currentDriveMode) {
-    currentDriveMode = null;
-    send({type: "move", mode: "stopped", durationMs: 0});
+  if (session.activeDriveTimer) {
+    clearInterval(session.activeDriveTimer);
+    session.activeDriveTimer = 0;
+  }
+  if (session.heldDriveMode) {
+    session.heldDriveMode = "";
+    send({type: "stop"});
   }
 }
 
 document.querySelectorAll('.dpad .btn').forEach(btn => {
   const mode = btn.dataset.mode;
   if (mode) {
-    btn.onpointerdown = (e) => { e.preventDefault(); startDriveLoop(mode); };
+    btn.onpointerdown = (e) => { 
+      e.preventDefault(); 
+      btn.setPointerCapture(e.pointerId);
+      startDriveLoop(mode); 
+    };
     btn.onpointerup = (e) => { e.preventDefault(); stopDriveLoop(); };
-    btn.onpointerleave = (e) => { e.preventDefault(); stopDriveLoop(); };
+    btn.onpointercancel = (e) => { e.preventDefault(); stopDriveLoop(); };
+    btn.addEventListener('lostpointercapture', () => { stopDriveLoop(); });
   }
 });
 
-// Safety: release control if browser loses focus
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden && isController) sendStop();
+window.addEventListener("keydown", (e) => {
+  if (session.role !== "controller") return;
+  if (["INPUT", "BUTTON"].includes(document.activeElement.tagName)) return;
+  let mode = null;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") mode = "forward";
+  else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") mode = "reverse";
+  else if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") mode = "turn_left";
+  else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") mode = "turn_right";
+  
+  if (mode) {
+    e.preventDefault();
+    if (session.heldDriveMode !== mode) startDriveLoop(mode);
+  }
 });
-window.addEventListener("blur", () => {
-  if (isController) sendStop();
+
+window.addEventListener("keyup", (e) => {
+  if (session.role !== "controller") return;
+  let mode = null;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") mode = "forward";
+  else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") mode = "reverse";
+  else if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") mode = "turn_left";
+  else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") mode = "turn_right";
+  
+  if (mode && session.heldDriveMode === mode) {
+    stopDriveLoop();
+  }
 });
+
+// Safety: release control if browser loses focus or navigates away
+document.addEventListener("visibilitychange", () => { if (document.hidden) sendStop(); });
+window.addEventListener("blur", () => { sendStop(); });
+window.addEventListener("pagehide", () => { sendStop(); });
+window.addEventListener("beforeunload", () => { sendStop(); });
 
 // Lease keepalive
 setInterval(() => {
-  if (isController && ws && ws.readyState === WebSocket.OPEN) {
+  if (session.role === 'controller' && session.connected) {
     send({type: "ping"});
   }
 }, 5000);

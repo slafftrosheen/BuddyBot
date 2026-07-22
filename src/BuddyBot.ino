@@ -17,6 +17,7 @@
 #include "AutonomyManager.h"
 #include "SystemStatus.h"
 #include "WifiControl.h"
+#include "BootDiagnostics.h"
 
 PersonaManager persona;
 RobotRenderer renderer;
@@ -30,6 +31,7 @@ ControlRouter router;
 AutonomyManager autonomy;
 SystemStatus systemStatus;
 WifiControl wifiControl;
+BootDiagnostics bootDiag;
 
 String serialBuffer;
 
@@ -50,15 +52,18 @@ void setup() {
   RobotBuildConfig activeBuild = getActiveBuildConfig();
   hal.begin(activeBuild);
 
-  actions.begin(&hal);
   robot.begin(&persona, &hal, &actions);
 
   autonomy.begin(&robot);
-  systemStatus.begin(&robot, &hal);
+  systemStatus.begin(&robot, &hal, &bootDiag);
   router.begin(&robot, &systemStatus);
+  router.setWifiControl(&wifiControl);
 
+  wifiControl.begin(&router, &robot, &systemStatus);
   if (ENABLE_WIFI_CONTROL) {
-    wifiControl.begin(&router, &robot, &systemStatus);
+    if (!wifiControl.start()) {
+      Serial.println("WIFI unavailable");
+    }
   }
 
   robot.setMood(Mood::IDLE, false);
@@ -68,15 +73,45 @@ void setup() {
   Serial.println(FIRMWARE_VERSION);
   Serial.printf("Build profile: %s\n", getActiveBuildName());
   Serial.printf("External Grove I2C: SDA=%d SCL=%d\n", I2C_SDA_PIN, I2C_SCL_PIN);
+  
+  Serial.println("--- SAFE DEFAULTS ---");
+  Serial.printf("ALLOW_MOTOR_ARMING: %s\n", ALLOW_MOTOR_ARMING ? "true" : "false");
+  Serial.printf("ENABLE_AUTONOMY_AT_BOOT: %s\n", ENABLE_AUTONOMY_AT_BOOT ? "true" : "false");
+  Serial.printf("ENABLE_CAUTIOUS_ROAM: %s\n", ENABLE_CAUTIOUS_ROAM ? "true" : "false");
+  Serial.println("---------------------");
+  
   protocol.printHelp();
+  
+  bootDiag.begin(&robot);
 }
 
 void handleButtons() {
-  if (M5.BtnA.wasClicked()) {
-    robot.nextMood();
+  bool aClicked = M5.BtnA.wasClicked();
+  bool bClicked = M5.BtnB.wasClicked();
+  bool aPressed = M5.BtnA.isPressed();
+  bool bPressed = M5.BtnB.isPressed();
+  
+  static uint32_t chordStart = 0;
+  static bool chordConsumed = false;
+
+  if (aPressed && bPressed) {
+    if (chordStart == 0) {
+      chordStart = millis();
+    } else if (!chordConsumed && (millis() - chordStart > 350)) {
+      chordConsumed = true;
+      if (wifiControl.running() && !wifiControl.controllerPresent()) {
+        wifiControl.requestNewPairingCode();
+      }
+    }
+  } else if (!aPressed && !bPressed) {
+    chordStart = 0;
+    chordConsumed = false;
   }
 
-  if (M5.BtnB.wasClicked()) {
+  if (aClicked && !chordConsumed) {
+    robot.nextMood();
+  }
+  if (bClicked && !chordConsumed) {
     robot.nextPersona();
   }
 }
@@ -127,18 +162,22 @@ void handleAutonomy() {
 
 void loop() {
   M5.update();
-
-  handleButtons();
-  handleSerial();
-
+  
+  if (!bootDiag.isComplete()) {
+    bootDiag.update();
+    return;
+  }
+  
+  hal.update();
   robot.update();
   handleAutonomy();
 
   if (ENABLE_WIFI_CONTROL) {
     wifiControl.update();
-    renderer.setWifiStatus(ENABLE_WIFI_CONTROL, systemStatus.getWifiSsid(), systemStatus.getWifiIp(), systemStatus.getWifiHasController());
-    renderer.setPairingCode(systemStatus.getPairingCode());
   }
+
+  handleButtons();
+  handleSerial();
 
   DriveMode mode = DriveMode::STOPPED;
   bool armed = false;
@@ -148,12 +187,32 @@ void loop() {
     armed = hal.drive()->isArmed();
   }
 
-  renderer.update(
-    persona,
-    robot.getMood(),
-    armed,
-    mode
-  );
+  RenderState rState;
+  rState.persona = &persona.current();
+  rState.mood = robot.baseMood();
+  rState.expression = robot.expression();
+  rState.action = robot.currentAction();
+  rState.motorsArmed = armed;
+  rState.motorAllowedByFirmware = ALLOW_MOTOR_ARMING;
+  rState.driveMode = mode;
+  rState.wifiEnabled = systemStatus.wifiRunning();
+  rState.wifiControllerConnected = systemStatus.wifiHasController();
+  
+  const char* pairingCode = systemStatus.getPairingCode();
+  rState.pairingAvailable = systemStatus.wifiPairingAvailable() && (pairingCode && pairingCode[0] != '\0');
+  rState.pairingCode = pairingCode;
+  
+  rState.apSsid = systemStatus.wifiSsid();
+  rState.apIp = systemStatus.wifiIp();
+  
+  RangeReading rr = robot.rangeReading();
+  rState.rangeValid = rr.valid;
+  rState.rangeMm = rr.distanceMm;
+  rState.obstacleDetected = robot.obstacleDetected();
+  rState.autonomyEnabled = robot.autonomyEnabled();
+  rState.batteryPercent = M5.Power.getBatteryLevel();
+  rState.batteryValid = true;
+  rState.safetyState = robot.obstacleSafetyStatus().state;
 
-  delay(2);
+  renderer.update(rState, robot.expressionEngine());
 }

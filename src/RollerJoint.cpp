@@ -13,7 +13,7 @@ bool RollerJoint::isConnected() const {
   return _bus && _bus->isConnected();
 }
 
-void RollerJoint::moveTo(int16_t value) {
+void RollerJoint::moveTo(int16_t value, uint16_t durationMs) {
   if (!_bus || !_bus->isConnected()) return;
   _current = constrain(value, _limits.minValue, _limits.maxValue);
   if (_bus) {

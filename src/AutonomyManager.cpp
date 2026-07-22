@@ -27,28 +27,28 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
     _state = AutonomyState::MONITORING;
   }
 
-  RangeReading r = _robot->rangeReading();
+  const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
   uint32_t now = millis();
 
   switch (_state) {
     case AutonomyState::MONITORING: {
-      if (r.valid && r.distanceMm > 0 && r.distanceMm < OBSTACLE_STOP_MM) {
-        outCommand.source = ControlSource::AUTONOMY;
-        outCommand.kind = CommandKind::STOP;
+      if (st.state == ObstacleSafetyState::BLOCKED) {
         _state = AutonomyState::STOPPING;
-        // RobotAPI saved the manual command before FSM executes.
-        return true;
+        _stateMs = now;
       }
       break;
     }
     case AutonomyState::STOPPING: {
-      outCommand.source = ControlSource::AUTONOMY;
-      outCommand.kind = CommandKind::MOVE;
-      outCommand.driveMode = DriveMode::REVERSE;
-      outCommand.durationMs = AUTONOMY_REVERSE_MS;
-      _stateMs = now;
-      _state = AutonomyState::BACKING_UP;
-      return true;
+      if (now - _stateMs > 200) { // Small pause
+        outCommand.source = ControlSource::AUTONOMY;
+        outCommand.kind = CommandKind::MOVE;
+        outCommand.driveMode = DriveMode::REVERSE;
+        outCommand.durationMs = AUTONOMY_REVERSE_MS;
+        _stateMs = now;
+        _state = AutonomyState::BACKING_UP;
+        return true;
+      }
+      break;
     }
     case AutonomyState::BACKING_UP: {
       if (now - _stateMs >= AUTONOMY_REVERSE_MS) {
@@ -73,7 +73,7 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
       break;
     }
     case AutonomyState::WAIT_FOR_CLEARANCE: {
-      if (r.valid && r.distanceMm >= OBSTACLE_CLEAR_MM) {
+      if (st.state == ObstacleSafetyState::CLEAR) {
         _state = AutonomyState::RESUMING;
       } else if (now - _stateMs >= AUTONOMY_CLEAR_TIMEOUT_MS) {
         _robot->clearRememberedDriveCommand();

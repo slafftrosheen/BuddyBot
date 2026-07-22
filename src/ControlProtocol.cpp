@@ -102,6 +102,44 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
     return true;
   }
 
+  if (op == "EXPR") {
+    String expr = tokenAt(line, 2, '|');
+    out.kind = CommandKind::PLAY_EXPRESSION;
+    
+    if (expr == "NONE") out.expression = ExpressionId::NONE;
+    else if (expr == "SURPRISED") out.expression = ExpressionId::SURPRISED;
+    else if (expr == "CONFUSED") out.expression = ExpressionId::CONFUSED;
+    else if (expr == "WORRIED") out.expression = ExpressionId::WORRIED;
+    else if (expr == "SCARED") out.expression = ExpressionId::SCARED;
+    else if (expr == "GIGGLE") out.expression = ExpressionId::GIGGLE;
+    else if (expr == "LOVE") out.expression = ExpressionId::LOVE;
+    else if (expr == "PROUD") out.expression = ExpressionId::PROUD;
+    else if (expr == "SLEEPYAWN") out.expression = ExpressionId::SLEEP_YAWN;
+    else if (expr == "THINK") out.expression = ExpressionId::THINK;
+    else if (expr == "LISTEN") out.expression = ExpressionId::LISTEN;
+    else if (expr == "OBSTACLE") out.expression = ExpressionId::OBSTACLE;
+    else if (expr == "WINKLEFT") out.expression = ExpressionId::WINK_LEFT;
+    else if (expr == "WINKRIGHT") out.expression = ExpressionId::WINK_RIGHT;
+    else return false;
+    
+    return true;
+  }
+  
+  if (op == "ATTENTION") {
+    String tgt = tokenAt(line, 2, '|');
+    out.kind = CommandKind::SET_ATTENTION;
+    
+    if (tgt == "CENTER") out.attention = AttentionTarget::CENTER;
+    else if (tgt == "LEFT") out.attention = AttentionTarget::LEFT;
+    else if (tgt == "RIGHT") out.attention = AttentionTarget::RIGHT;
+    else if (tgt == "UP") out.attention = AttentionTarget::UP;
+    else if (tgt == "DOWN") out.attention = AttentionTarget::DOWN;
+    else if (tgt == "RANDOM") out.attention = AttentionTarget::RANDOM;
+    else return false;
+    
+    return true;
+  }
+
   if (op == "ACC") {
     out.kind = CommandKind::ACCESSORY;
 
@@ -134,11 +172,25 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
     return true;
   }
 
+  if (op == "VERSION") {
+    out.kind = CommandKind::VERSION;
+    return true;
+  }
+
   if (op == "AUTONOMY") {
     out.kind = CommandKind::AUTONOMY_SET;
     String val = tokenAt(line, 2, '|');
     out.flag = (val == "ON");
     return true;
+  }
+
+  if (op == "WIFI") {
+    String sub = tokenAt(line, 2, '|');
+    if (sub == "STATUS") { out.kind = CommandKind::CTRL_WIFI_STATUS; return true; }
+    if (sub == "ON") { out.kind = CommandKind::CTRL_WIFI_ON; return true; }
+    if (sub == "OFF") { out.kind = CommandKind::CTRL_WIFI_OFF; return true; }
+    if (sub == "PAIR") { out.kind = CommandKind::CTRL_WIFI_PAIR; return true; }
+    return false;
   }
 
   return false;
@@ -157,8 +209,19 @@ bool ControlProtocol::parseLegacyCommand(String line, RobotCommand& out) {
   if (line == "PROFILE LIST") { out.kind = CommandKind::PROFILE_LIST; return true; }
   if (line == "PROFILE SHOW") { out.kind = CommandKind::PROFILE_SHOW; return true; }
   if (line == "STATUS") { out.kind = CommandKind::STATUS_QUERY; return true; }
+  if (line == "VERSION") { out.kind = CommandKind::VERSION; return true; }
+  if (line == "DIAG BOOT") { out.kind = CommandKind::DIAG_BOOT; return true; }
+  if (line == "EVENTS") { out.kind = CommandKind::PRINT_EVENTS; return true; }
+  if (line == "SENSOR STATUS") { out.kind = CommandKind::CTRL_SENSOR_STATUS; return true; }
+  if (line == "SAFETY STATUS") { out.kind = CommandKind::CTRL_SAFETY_STATUS; return true; }
+  if (line == "AUTONOMY STATUS") { out.kind = CommandKind::CTRL_AUTONOMY_STATUS; return true; }
   if (line == "AUTONOMY ON") { out.kind = CommandKind::AUTONOMY_SET; out.flag = true; return true; }
   if (line == "AUTONOMY OFF") { out.kind = CommandKind::AUTONOMY_SET; out.flag = false; return true; }
+  
+  if (line == "WIFI STATUS") { out.kind = CommandKind::CTRL_WIFI_STATUS; return true; }
+  if (line == "WIFI ON") { out.kind = CommandKind::CTRL_WIFI_ON; return true; }
+  if (line == "WIFI OFF") { out.kind = CommandKind::CTRL_WIFI_OFF; return true; }
+  if (line == "WIFI PAIR") { out.kind = CommandKind::CTRL_WIFI_PAIR; return true; }
 
   if (line == "MOOD IDLE") { out.kind = CommandKind::SET_MOOD; out.mood = Mood::IDLE; return true; }
   if (line == "MOOD HAPPY") { out.kind = CommandKind::SET_MOOD; out.mood = Mood::HAPPY; return true; }
@@ -180,12 +243,80 @@ bool ControlProtocol::parseLegacyCommand(String line, RobotCommand& out) {
   if (line == "ACTION DANCE") { out.kind = CommandKind::ACTION; out.action = ActionId::DANCE; return true; }
   if (line == "ACTION SLEEP") { out.kind = CommandKind::ACTION; out.action = ActionId::SLEEP; return true; }
 
+  if (line.startsWith("EXPR ")) {
+    out.kind = CommandKind::PLAY_EXPRESSION;
+    if (line == "EXPR NONE") { out.expression = ExpressionId::NONE; return true; }
+    if (line == "EXPR SURPRISED") { out.expression = ExpressionId::SURPRISED; return true; }
+    if (line == "EXPR CONFUSED") { out.expression = ExpressionId::CONFUSED; return true; }
+    if (line == "EXPR WORRIED") { out.expression = ExpressionId::WORRIED; return true; }
+    if (line == "EXPR SCARED") { out.expression = ExpressionId::SCARED; return true; }
+    if (line == "EXPR GIGGLE") { out.expression = ExpressionId::GIGGLE; return true; }
+    if (line == "EXPR LOVE") { out.expression = ExpressionId::LOVE; return true; }
+    if (line == "EXPR PROUD") { out.expression = ExpressionId::PROUD; return true; }
+    if (line == "EXPR SLEEPYAWN") { out.expression = ExpressionId::SLEEP_YAWN; return true; }
+    if (line == "EXPR THINK") { out.expression = ExpressionId::THINK; return true; }
+    if (line == "EXPR LISTEN") { out.expression = ExpressionId::LISTEN; return true; }
+    if (line == "EXPR OBSTACLE") { out.expression = ExpressionId::OBSTACLE; return true; }
+    if (line == "EXPR WINKLEFT") { out.expression = ExpressionId::WINK_LEFT; return true; }
+    if (line == "EXPR WINKRIGHT") { out.expression = ExpressionId::WINK_RIGHT; return true; }
+  }
+
+  if (line.startsWith("ATTENTION ")) {
+    out.kind = CommandKind::SET_ATTENTION;
+    if (line == "ATTENTION CENTER") { out.attention = AttentionTarget::CENTER; return true; }
+    if (line == "ATTENTION LEFT") { out.attention = AttentionTarget::LEFT; return true; }
+    if (line == "ATTENTION RIGHT") { out.attention = AttentionTarget::RIGHT; return true; }
+    if (line == "ATTENTION UP") { out.attention = AttentionTarget::UP; return true; }
+    if (line == "ATTENTION DOWN") { out.attention = AttentionTarget::DOWN; return true; }
+    if (line == "ATTENTION RANDOM") { out.attention = AttentionTarget::RANDOM; return true; }
+  }
+
   if (line == "ACC 1 ON") { out.kind = CommandKind::ACCESSORY; out.index = 1; out.flag = true; return true; }
   if (line == "ACC 1 OFF") { out.kind = CommandKind::ACCESSORY; out.index = 1; out.flag = false; return true; }
   if (line == "ACC 2 ON") { out.kind = CommandKind::ACCESSORY; out.index = 2; out.flag = true; return true; }
   if (line == "ACC 2 OFF") { out.kind = CommandKind::ACCESSORY; out.index = 2; out.flag = false; return true; }
   if (line == "ACC 3 ON") { out.kind = CommandKind::ACCESSORY; out.index = 3; out.flag = true; return true; }
   if (line == "ACC 3 OFF") { out.kind = CommandKind::ACCESSORY; out.index = 3; out.flag = false; return true; }
+
+  if (line.startsWith("SERVO TEST ")) {
+    out.kind = CommandKind::SERVO_TEST;
+    String sub = line.substring(11);
+    if (sub == "UNLOCK") { out.arg1 = -1; return true; }
+    if (sub == "STOP") { out.arg1 = -2; return true; }
+    
+    // SERVO TEST <0-7> <speed>
+    int space = sub.indexOf(' ');
+    if (space > 0) {
+      out.arg1 = sub.substring(0, space).toInt();
+      out.arg2 = sub.substring(space + 1).toInt();
+      return true;
+    }
+  }
+
+  if (line.startsWith("JOINT MOVE ")) {
+    out.kind = CommandKind::JOINT_MOVE;
+    String sub = line.substring(11); // "<role> <deg> <dur>"
+    int space1 = sub.indexOf(' ');
+    if (space1 > 0) {
+      out.arg1 = sub.substring(0, space1).toInt();
+      String rest = sub.substring(space1 + 1);
+      int space2 = rest.indexOf(' ');
+      if (space2 > 0) {
+        out.arg2 = rest.substring(0, space2).toInt(); // deg
+        out.durationMs = rest.substring(space2 + 1).toInt();
+      } else {
+        out.arg2 = rest.toInt();
+        out.durationMs = 500;
+      }
+      return true;
+    }
+  }
+
+  if (line.startsWith("JOINT REST ")) {
+    out.kind = CommandKind::JOINT_REST;
+    out.arg1 = line.substring(11).toInt();
+    return true;
+  }
 
   return false;
 }
@@ -197,18 +328,24 @@ void ControlProtocol::printHelp() const {
   Serial.println("PERSONA NEXT");
   Serial.println("MOVE FWD|REV|LEFT|RIGHT");
   Serial.println("ACTION WAVE|GREET|LOOKLEFT|LOOKRIGHT|CELEBRATE|DANCE|SLEEP");
+  Serial.println("EXPR NONE|SURPRISED|CONFUSED|WORRIED|SCARED|GIGGLE|LOVE|PROUD|SLEEPYAWN|THINK|LISTEN|OBSTACLE|WINKLEFT|WINKRIGHT");
+  Serial.println("ATTENTION CENTER|LEFT|RIGHT|UP|DOWN|RANDOM");
   Serial.println("ACC 1|2|3 ON|OFF");
   Serial.println("RANGE");
   Serial.println("PROFILE LIST");
   Serial.println("PROFILE SHOW");
   Serial.println("STATUS");
   Serial.println("AUTONOMY ON|OFF");
+  Serial.println("WIFI STATUS|ON|OFF|PAIR");
 
   Serial.println("Pipe protocol:");
   Serial.println("CMD|ARM");
   Serial.println("CMD|MOVE|FWD|500");
   Serial.println("CMD|ACTION|WAVE");
+  Serial.println("CMD|EXPR|GIGGLE");
+  Serial.println("CMD|ATTENTION|LEFT");
   Serial.println("CMD|PROFILE|SHOW");
   Serial.println("CMD|STATUS");
   Serial.println("CMD|AUTONOMY|ON");
+  Serial.println("CMD|WIFI|STATUS");
 }

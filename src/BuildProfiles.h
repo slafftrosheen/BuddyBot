@@ -1,5 +1,6 @@
 #pragma once
 #include "Config.h"
+#include "ServoConfig.h"
 
 struct NamedBuildProfile {
   BuildProfileId id;
@@ -13,6 +14,8 @@ extern const size_t BUILD_PROFILE_COUNT;
 
 RobotBuildConfig getActiveBuildConfig();
 const char* getActiveBuildName();
+const ServoChannelConfig* getActiveServoConfig();
 const NamedBuildProfile* findBuildProfile(BuildProfileId id);
 void printBuildProfile(const RobotBuildConfig& config);
 void printAllBuildProfiles();
+bool validateBuildConfig(const RobotBuildConfig& config, const ServoChannelConfig* servos);

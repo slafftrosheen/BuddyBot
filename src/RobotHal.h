@@ -11,6 +11,7 @@
 #include "RollerDrive.h"
 #include "RollerJoint.h"
 #include "Config.h"
+#include "ActuatorState.h"
 
 class RobotHal {
 public:
@@ -24,6 +25,12 @@ public:
   IRangeSensor* range() const { return _range; }
   IJoint* accessory(uint8_t index) const;
   const RobotBuildConfig& buildConfig() const { return _config; }
+  
+  ActuatorCapabilities capabilities() const;
+  ManipulatorState manipulatorState(ManipulatorId id) const;
+
+  // For diagnostics only
+  void writeRawPulse(ServoRole role, uint16_t pulseUs);
 
 private:
   RobotBuildConfig _config;

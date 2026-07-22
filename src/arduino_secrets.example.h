@@ -1,4 +1,4 @@
 #pragma once
 
-#define BUDDYBOT_STA_SSID     ""
-#define BUDDYBOT_STA_PASSWORD ""
+constexpr char SECRET_STA_SSID[] = "";
+constexpr char SECRET_STA_PASSWORD[] = "";

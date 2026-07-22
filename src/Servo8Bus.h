@@ -5,29 +5,36 @@
 #include <M5_UNIT_8SERVO.h>
 #include "Config.h"
 
+#include "ServoConfig.h"
+
 class Servo8Bus {
 public:
-  bool begin() {
-    _connected = _unit.begin(&Wire, I2C_SDA_PIN, I2C_SCL_PIN, SERVOS8_ADDR);
-    if (_connected) {
-      _unit.setAllPinMode(SERVO_CTL_MODE);
-    }
-    return _connected;
-  }
+  bool begin();
+  bool isConnected() const;
 
-  bool isConnected() const { return _connected; }
+  bool configureChannel(const ServoChannelConfig& config);
+  bool configureAll(const ServoChannelConfig configs[8]);
 
-  void setPulse(uint8_t ch, uint16_t us) {
-    if (!_connected || ch > 7) return;
-    _unit.setServoPulse(ch, constrain(us, SERVO_MIN_US, SERVO_MAX_US));
-  }
+  bool writePulse(uint8_t channel, uint16_t pulseUs);
+  bool writeAngle(uint8_t channel, uint8_t degrees);
 
-  void setAngle(uint8_t ch, uint8_t deg) {
-    if (!_connected || ch > 7) return;
-    _unit.setServoAngle(ch, constrain(deg, 0, 180));
-  }
+  bool stopContinuous(uint8_t channel);
+  void stopAllContinuous();
+
+  bool hasRole(ServoRole role) const;
+  const ServoChannelConfig* configForChannel(uint8_t channel) const;
+  const ServoChannelConfig* configForRole(ServoRole role) const;
+
+  bool channelIsContinuous(uint8_t channel) const;
+  bool channelIsPositional(uint8_t channel) const;
+
+  uint16_t lastPulse(uint8_t channel) const;
+  uint8_t lastAngle(uint8_t channel) const;
 
 private:
   M5_UNIT_8SERVO _unit;
   bool _connected = false;
+  ServoChannelConfig _channels[SERVO8_CHANNEL_COUNT];
+  uint16_t _lastPulse[SERVO8_CHANNEL_COUNT] = {0};
+  uint8_t _lastAngle[SERVO8_CHANNEL_COUNT] = {0};
 };

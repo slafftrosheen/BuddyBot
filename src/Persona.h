@@ -1,6 +1,10 @@
 #pragma once
 #include "Types.h"
 
+const ExpressionSpec& expressionSpec(ExpressionId id);
+const char* moodName(Mood mood);
+const char* expressionName(ExpressionId expression);
+
 class PersonaManager {
 public:
   void begin();

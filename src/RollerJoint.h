@@ -9,7 +9,7 @@ public:
 
   bool begin() override;
   bool isConnected() const override;
-  void moveTo(int16_t value) override;
+  void moveTo(int16_t value, uint16_t durationMs = 0) override;
   int16_t current() const override;
   void rest() override;
 

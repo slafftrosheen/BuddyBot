@@ -12,9 +12,11 @@ enum class ActionDrivePolicy : uint8_t {
   STOP_DRIVE
 };
 
+class PersonaManager;
+
 class RobotActions {
 public:
-  void begin(RobotHal* hal);
+  void begin(RobotHal* hal, PersonaManager* personas);
 
   void update();
 
@@ -26,6 +28,7 @@ public:
 
 private:
   RobotHal* _hal = nullptr;
+  PersonaManager* _personas = nullptr;
 
   ActionDrivePolicy drivePolicy(ActionId action) const;
   uint16_t timeoutFor(ActionId action) const;

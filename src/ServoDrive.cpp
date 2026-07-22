@@ -1,7 +1,7 @@
 #include "ServoDrive.h"
 #include "Config.h"
 
-ServoDrive::ServoDrive(Servo8Bus* bus) : _bus(bus) {}
+ServoDrive::ServoDrive(Servo8Bus* bus, const ServoDriveLayout& layout) : _bus(bus), _layout(layout) {}
 
 bool ServoDrive::begin() {
   emergencyStop();
@@ -22,12 +22,16 @@ bool ServoDrive::isArmed() const {
   return _armed;
 }
 
+bool ServoDrive::isFourWheel() const {
+  return _layout.isFourWheel;
+}
+
 void ServoDrive::arm() {
   if (!isConnected() || !ALLOW_MOTOR_ARMING) {
     _armed = false;
     return;
   }
-  wheels(LEFT_STOP_US, RIGHT_STOP_US);
+  stopDrive();
   _armed = true;
 }
 
@@ -38,15 +42,50 @@ void ServoDrive::disarm() {
 
 void ServoDrive::emergencyStop() {
   if (isConnected()) {
-    wheels(LEFT_STOP_US, RIGHT_STOP_US);
+    stopDrive();
   }
   _mode = DriveMode::STOPPED;
   _stopAtMs = 0;
 }
 
-void ServoDrive::wheels(uint16_t leftUs, uint16_t rightUs) {
-  _bus->setPulse(LEFT_WHEEL_CHANNEL, leftUs);
-  _bus->setPulse(RIGHT_WHEEL_CHANNEL, rightUs);
+void ServoDrive::applyDrivePulse(ServoRole role, bool forward) {
+  if (role == ServoRole::UNUSED) return;
+  const ServoChannelConfig* cfg = _bus->configForRole(role);
+  if (!cfg || !cfg->enabled || !cfg->continuousRotation) return;
+
+  uint16_t pulse = forward ? cfg->continuous.forwardUs : cfg->continuous.reverseUs;
+  _bus->writePulse(cfg->channel, pulse);
+}
+
+void ServoDrive::setLeftDrive(bool forward) {
+  applyDrivePulse(_layout.frontLeft, forward);
+  if (_layout.isFourWheel) {
+    applyDrivePulse(_layout.rearLeft, forward);
+  }
+}
+
+void ServoDrive::setRightDrive(bool forward) {
+  applyDrivePulse(_layout.frontRight, forward);
+  if (_layout.isFourWheel) {
+    applyDrivePulse(_layout.rearRight, forward);
+  }
+}
+
+void ServoDrive::stopDrive() {
+  auto stopRole = [this](ServoRole role) {
+    if (role == ServoRole::UNUSED) return;
+    const ServoChannelConfig* cfg = _bus->configForRole(role);
+    if (cfg && cfg->enabled && cfg->continuousRotation) {
+      _bus->writePulse(cfg->channel, cfg->continuous.stopUs);
+    }
+  };
+
+  stopRole(_layout.frontLeft);
+  stopRole(_layout.frontRight);
+  if (_layout.isFourWheel) {
+    stopRole(_layout.rearLeft);
+    stopRole(_layout.rearRight);
+  }
 }
 
 void ServoDrive::drive(const DriveCommand& cmd) {
@@ -56,11 +95,25 @@ void ServoDrive::drive(const DriveCommand& cmd) {
   }
 
   switch (cmd.mode) {
-    case DriveMode::FORWARD:    wheels(LEFT_FORWARD_US, RIGHT_FORWARD_US); break;
-    case DriveMode::REVERSE:    wheels(LEFT_REVERSE_US, RIGHT_REVERSE_US); break;
-    case DriveMode::TURN_LEFT:  wheels(LEFT_REVERSE_US, RIGHT_FORWARD_US); break;
-    case DriveMode::TURN_RIGHT: wheels(LEFT_FORWARD_US, RIGHT_REVERSE_US); break;
-    default: emergencyStop(); return;
+    case DriveMode::FORWARD:
+      setLeftDrive(true);
+      setRightDrive(true);
+      break;
+    case DriveMode::REVERSE:
+      setLeftDrive(false);
+      setRightDrive(false);
+      break;
+    case DriveMode::TURN_LEFT:
+      setLeftDrive(false);
+      setRightDrive(true);
+      break;
+    case DriveMode::TURN_RIGHT:
+      setLeftDrive(true);
+      setRightDrive(false);
+      break;
+    default:
+      emergencyStop();
+      return;
   }
 
   _mode = cmd.mode;
