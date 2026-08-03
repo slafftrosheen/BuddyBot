@@ -28,6 +28,19 @@ void RobotAPI::update() {
   if (_actions) _actions->update();
   _safety.update(rangeReading(), millis());
   _imu.update(millis());
+
+  if (_hal && _hal->drive() &&
+      _hal->drive()->driveMode() == DriveMode::FORWARD &&
+      _safety.blocksForwardMotion()) {
+    _hal->drive()->emergencyStop();
+    clearRememberedDriveCommand();
+    _safety.recordExternalStop(
+      _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE
+        ? SafetyStopReason::RANGE_SENSOR_INVALID
+        : SafetyStopReason::OBSTACLE_BLOCKED,
+      millis()
+    );
+  }
   
   if (obstacleDetected()) {
     _expressions.notifyObstacle();
