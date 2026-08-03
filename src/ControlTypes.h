@@ -39,7 +39,8 @@ enum class CommandKind : uint8_t {
   JOINT_REST,
   VERSION,
   DIAG_BOOT,
-  PRINT_EVENTS
+  PRINT_EVENTS,
+  CTRL_IMU_STATUS
 };
 
 struct RobotCommand {

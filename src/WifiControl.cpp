@@ -581,6 +581,19 @@ void WifiControl::broadcastTelemetry() {
   
   t.forwardMotionBlocked = st.forwardMotionBlocked;
 
+  const ImuReading& imu = _robot->imuReading();
+  t.imuAvailable = imu.available;
+  t.imuValid = imu.valid;
+  if (imu.valid) {
+    t.imuSampleTimeMs = imu.sampleTimeMs;
+    t.accelXG = imu.accelXG;
+    t.accelYG = imu.accelYG;
+    t.accelZG = imu.accelZG;
+    t.gyroXDps = imu.gyroXDps;
+    t.gyroYDps = imu.gyroYDps;
+    t.gyroZDps = imu.gyroZDps;
+  }
+
   String telemetryJson = _protocol.generateTelemetry(t);
   if (_ws) _ws->textAll(telemetryJson);
 }

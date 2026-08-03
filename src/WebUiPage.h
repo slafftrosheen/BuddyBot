@@ -99,6 +99,18 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
         <span>Firmware</span>
         <span id="firmwareBadge">--</span>
       </div>
+      <div class="badge-row" style="margin-top: 8px;">
+        <span>Built-in IMU</span>
+        <span id="imuBadge">--</span>
+      </div>
+      <div class="badge-row" style="margin-top: 8px;">
+        <span>Acceleration</span>
+        <span id="accelBadge">--</span>
+      </div>
+      <div class="badge-row" style="margin-top: 8px;">
+        <span>Rotation</span>
+        <span id="gyroBadge">--</span>
+      </div>
     </div>
 
     <button class="btn stop" id="btnStop" onpointerdown="sendStop()">EMERGENCY STOP</button>
@@ -360,7 +372,25 @@ function updateTelemetry(t) {
   if (t.firmwareVersion) {
     document.getElementById('firmwareBadge').textContent = `${t.firmwareVersion} (${t.firmwareChannel})`;
   }
-  
+
+  const imuBadge = document.getElementById('imuBadge');
+  if (!t.imuAvailable) {
+    imuBadge.textContent = 'Unavailable';
+    imuBadge.style.color = 'var(--danger)';
+  } else if (!t.imuValid) {
+    imuBadge.textContent = 'Waiting for data';
+    imuBadge.style.color = 'orange';
+  } else {
+    imuBadge.textContent = 'Ready';
+    imuBadge.style.color = 'var(--success)';
+  }
+  document.getElementById('accelBadge').textContent = t.imuValid
+    ? `${t.accelG.x.toFixed(2)}, ${t.accelG.y.toFixed(2)}, ${t.accelG.z.toFixed(2)} g`
+    : '--';
+  document.getElementById('gyroBadge').textContent = t.imuValid
+    ? `${t.gyroDps.x.toFixed(1)}, ${t.gyroDps.y.toFixed(1)}, ${t.gyroDps.z.toFixed(1)} °/s`
+    : '--';
+
   updateRoleUI();
 }
 

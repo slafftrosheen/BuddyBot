@@ -39,6 +39,15 @@ struct RobotTelemetry {
   bool fourWheelDrive = false;
   bool hasManipulators = false;
   bool actionRunning = false;
-};
 
+  bool imuAvailable = false;
+  bool imuValid = false;
+  uint32_t imuSampleTimeMs = 0;
+  float accelXG = 0.0f;
+  float accelYG = 0.0f;
+  float accelZG = 0.0f;
+  float gyroXDps = 0.0f;
+  float gyroYDps = 0.0f;
+  float gyroZDps = 0.0f;
+};
 
