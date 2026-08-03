@@ -46,8 +46,11 @@ void RobotAPI::update() {
         : SafetyStopReason::OBSTACLE_BLOCKED,
       nowMs
     );
+    const RangeSensorHealth sensorHealth = rangeSensorHealth();
     if (_safetySupervisor &&
-        _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE) {
+        _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE &&
+        (sensorHealth == RangeSensorHealth::INVALID ||
+         sensorHealth == RangeSensorHealth::UNAVAILABLE)) {
       _safetySupervisor->emergencyStop(SafetyFault::RANGE_SENSOR_INVALID, nowMs);
     }
   }
