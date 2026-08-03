@@ -11,6 +11,10 @@
 constexpr char FIRMWARE_NAME[] = "BuddyBot OS";
 constexpr char FIRMWARE_VERSION[] = "0.3.0-beta.1";
 constexpr char FIRMWARE_CHANNEL[] = "hardware-safety-beta";
+constexpr uint8_t CONTROL_PROTOCOL_VERSION = 1;
+constexpr uint16_t CONFIG_SCHEMA_VERSION = 1;
+constexpr uint16_t HARDWARE_MANIFEST_VERSION = 1;
+constexpr uint16_t SAFETY_POLICY_VERSION = 1;
 
 // ---------- Display ----------
 constexpr uint8_t DISPLAY_ROTATION = 0;
@@ -31,6 +35,11 @@ constexpr uint8_t MAX_PERSONA_PARTICLES = 8;
 
 // ---------- Built-in BMI270 IMU ----------
 constexpr uint16_t IMU_SAMPLE_INTERVAL_MS = 100;
+constexpr uint16_t IMU_MAX_SAMPLE_AGE_MS = 500;
+constexpr float IMU_MIN_ACCEL_G = 0.25f;
+constexpr float IMU_MAX_ACCEL_G = 3.0f;
+constexpr float IMU_MAX_TILT_DEG = 35.0f;
+constexpr float IMU_MAX_GYRO_DPS = 720.0f;
 
 // ---------- I2C bus ----------
 constexpr int I2C_SDA_PIN = 9;
@@ -62,6 +71,10 @@ constexpr bool ENABLE_CAUTIOUS_ROAM = false;
 
 constexpr bool ENABLE_OBSTACLE_SAFETY = true;
 constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = true;
+constexpr uint16_t SAFETY_MANUAL_OVERRIDE_MS = 600;
+constexpr uint16_t PHYSICAL_ESTOP_HOLD_MS = 1200;
+constexpr uint16_t PHYSICAL_ESTOP_RESET_HOLD_MS = 2500;
+constexpr uint16_t SYSTEM_TASK_WATCHDOG_TIMEOUT_MS = 3000;
 
 static_assert(!ALLOW_MOTOR_ARMING || ENABLE_OBSTACLE_SAFETY, "Motor arming should not be enabled without obstacle safety");
 static_assert(!ENABLE_CAUTIOUS_ROAM || ALLOW_MOTOR_ARMING, "Cautious roam requires motor arming");
@@ -253,6 +266,8 @@ constexpr uint8_t WIFI_MAX_CLIENTS = 2;
 
 constexpr uint8_t WIFI_MAX_COMMANDS_PER_SECOND = 20;
 constexpr uint8_t WIFI_MAX_PAIR_ATTEMPTS_PER_MINUTE = 5;
+constexpr uint32_t WIFI_PAIRING_LOCKOUT_MS = 60000;
+constexpr uint32_t WIFI_UNPAIRED_CLIENT_TIMEOUT_MS = 30000;
 
 constexpr uint16_t WIFI_TELEMETRY_INTERVAL_MS = 250;
 constexpr uint16_t WIFI_DRIVE_KEEPALIVE_MS = 150;

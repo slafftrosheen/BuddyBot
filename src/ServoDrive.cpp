@@ -117,7 +117,10 @@ void ServoDrive::drive(const DriveCommand& cmd) {
   }
 
   _mode = cmd.mode;
-  _stopAtMs = cmd.durationMs ? millis() + min(cmd.durationMs, SAFE_DRIVE_TIME_MS) : 0;
+  const uint16_t boundedDuration = cmd.durationMs > 0
+    ? min(cmd.durationMs, SAFE_DRIVE_TIME_MS)
+    : SAFE_DRIVE_TIME_MS;
+  _stopAtMs = millis() + boundedDuration;
 }
 
 DriveMode ServoDrive::driveMode() const {

@@ -1,4 +1,5 @@
 #include "ControlProtocol.h"
+#include "Config.h"
 
 String ControlProtocol::tokenAt(const String& input, int index, char sep) {
   int start = 0;
@@ -14,6 +15,46 @@ String ControlProtocol::tokenAt(const String& input, int index, char sep) {
     }
   }
   return "";
+}
+
+bool ControlProtocol::hasTokenCount(const String& input, char sep, int expectedCount) {
+  int count = 1;
+  for (int i = 0; i < input.length(); ++i) {
+    if (input[i] == sep) {
+      ++count;
+    }
+  }
+  return count == expectedCount;
+}
+
+bool ControlProtocol::parseBoundedUInt(
+  const String& input,
+  uint16_t minimum,
+  uint16_t maximum,
+  uint16_t& out
+) {
+  if (input.length() == 0) {
+    return false;
+  }
+
+  uint32_t value = 0;
+  for (int i = 0; i < input.length(); ++i) {
+    const char c = input[i];
+    if (c < '0' || c > '9') {
+      return false;
+    }
+    value = value * 10U + uint32_t(c - '0');
+    if (value > maximum) {
+      return false;
+    }
+  }
+
+  if (value < minimum) {
+    return false;
+  }
+
+  out = static_cast<uint16_t>(value);
+  return true;
 }
 
 bool ControlProtocol::parseLine(String line, RobotCommand& out) {
@@ -38,21 +79,25 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   String op = tokenAt(line, 1, '|');
 
   if (op == "ARM") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::ARM;
     return true;
   }
 
   if (op == "DISARM") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::DISARM;
     return true;
   }
 
   if (op == "STOP") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::STOP;
     return true;
   }
 
   if (op == "MOOD") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     String mood = tokenAt(line, 2, '|');
     out.kind = CommandKind::SET_MOOD;
     if (mood == "IDLE") out.mood = Mood::IDLE;
@@ -66,16 +111,18 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
 
   if (op == "PERSONA" && tokenAt(line, 2, '|') == "NEXT") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     out.kind = CommandKind::NEXT_PERSONA;
     return true;
   }
 
   if (op == "MOVE") {
+    if (!hasTokenCount(line, '|', 4)) return false;
     String dir = tokenAt(line, 2, '|');
     String dur = tokenAt(line, 3, '|');
 
     out.kind = CommandKind::MOVE;
-    out.durationMs = dur.length() ? uint16_t(dur.toInt()) : 500;
+    if (!parseBoundedUInt(dur, 50, SAFE_DRIVE_TIME_MS, out.durationMs)) return false;
 
     if (dir == "FWD") out.driveMode = DriveMode::FORWARD;
     else if (dir == "REV") out.driveMode = DriveMode::REVERSE;
@@ -87,6 +134,7 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
 
   if (op == "ACTION") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     String act = tokenAt(line, 2, '|');
     out.kind = CommandKind::ACTION;
 
@@ -103,6 +151,7 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
 
   if (op == "EXPR") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     String expr = tokenAt(line, 2, '|');
     out.kind = CommandKind::PLAY_EXPRESSION;
     
@@ -126,6 +175,7 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
   
   if (op == "ATTENTION") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     String tgt = tokenAt(line, 2, '|');
     out.kind = CommandKind::SET_ATTENTION;
     
@@ -141,50 +191,68 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
 
   if (op == "ACC") {
+    if (!hasTokenCount(line, '|', 4)) return false;
     out.kind = CommandKind::ACCESSORY;
 
     String idx = tokenAt(line, 2, '|');
     String state = tokenAt(line, 3, '|');
 
-    out.index = uint8_t(idx.toInt());
-    out.flag = (state == "ON");
+    uint16_t index = 0;
+    if (!parseBoundedUInt(idx, 1, 3, index)) return false;
+    if (state != "ON" && state != "OFF") return false;
+    out.index = static_cast<uint8_t>(index);
+    out.flag = state == "ON";
 
     return out.index >= 1 && out.index <= 3;
   }
 
   if (op == "RANGE") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::RANGE_QUERY;
     return true;
   }
 
   if (op == "PROFILE" && tokenAt(line, 2, '|') == "LIST") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     out.kind = CommandKind::PROFILE_LIST;
     return true;
   }
 
   if (op == "PROFILE" && tokenAt(line, 2, '|') == "SHOW") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     out.kind = CommandKind::PROFILE_SHOW;
     return true;
   }
 
   if (op == "STATUS") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::STATUS_QUERY;
     return true;
   }
 
   if (op == "VERSION") {
+    if (!hasTokenCount(line, '|', 2)) return false;
     out.kind = CommandKind::VERSION;
     return true;
   }
 
   if (op == "AUTONOMY") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     out.kind = CommandKind::AUTONOMY_SET;
     String val = tokenAt(line, 2, '|');
-    out.flag = (val == "ON");
-    return true;
+    if (val == "ON") {
+      out.flag = true;
+      return true;
+    }
+    if (val == "OFF") {
+      out.flag = false;
+      return true;
+    }
+    return false;
   }
 
   if (op == "WIFI") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     String sub = tokenAt(line, 2, '|');
     if (sub == "STATUS") { out.kind = CommandKind::CTRL_WIFI_STATUS; return true; }
     if (sub == "ON") { out.kind = CommandKind::CTRL_WIFI_ON; return true; }
@@ -194,6 +262,7 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
   }
 
   if (op == "IMU" && tokenAt(line, 2, '|') == "STATUS") {
+    if (!hasTokenCount(line, '|', 3)) return false;
     out.kind = CommandKind::CTRL_IMU_STATUS;
     return true;
   }
@@ -290,12 +359,17 @@ bool ControlProtocol::parseLegacyCommand(String line, RobotCommand& out) {
     if (sub == "UNLOCK") { out.arg1 = -1; return true; }
     if (sub == "STOP") { out.arg1 = -2; return true; }
     
-    // SERVO TEST <0-7> <speed>
+    // SERVO TEST <1-4> <pulse_us>
     int space = sub.indexOf(' ');
     if (space > 0) {
-      out.arg1 = sub.substring(0, space).toInt();
-      out.arg2 = sub.substring(space + 1).toInt();
-      return true;
+      uint16_t role = 0;
+      uint16_t pulse = 0;
+      if (parseBoundedUInt(sub.substring(0, space), 1, 4, role) &&
+          parseBoundedUInt(sub.substring(space + 1), SERVO_MIN_US, SERVO_MAX_US, pulse)) {
+        out.arg1 = static_cast<int16_t>(role);
+        out.arg2 = static_cast<int16_t>(pulse);
+        return true;
+      }
     }
   }
 

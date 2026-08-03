@@ -8,10 +8,13 @@
 #include "ServoDiagnostics.h"
 #include "ObstacleSafety.h"
 #include "ImuMonitor.h"
+#include "ControlTypes.h"
+#include "SafetySupervisor.h"
 
 class RobotAPI {
 public:
   void begin(PersonaManager* persona, RobotHal* hal, RobotActions* actions);
+  void setSafetySupervisor(SafetySupervisor* supervisor);
   void update();
 
   Mood getMood() const;
@@ -21,7 +24,7 @@ public:
   void nextPersona();
   const char* personaName() const;
 
-  void armMotors();
+  bool armMotors();
   void disarmMotors();
   void stopAll();
 
@@ -39,7 +42,12 @@ public:
   void restJoint(ServoRole role);
   void setAccessoryPosition(uint8_t index, bool active);
 
-  bool move(DriveMode mode, uint16_t durationMs, bool cancelAction = true);
+  bool move(
+    DriveMode mode,
+    uint16_t durationMs,
+    bool cancelAction = true,
+    ControlSource source = ControlSource::LOCAL_UI
+  );
   void action(ActionId actionId);
 
   void playExpression(ExpressionId expression, uint16_t durationMs = 0);
@@ -53,6 +61,7 @@ public:
 
   void setAutonomyEnabled(bool enabled);
   bool autonomyEnabled() const;
+  bool autonomyMotionAllowed() const;
 
   void rememberDriveCommand(const DriveCommand& cmd);
   bool lastDriveCommand(DriveCommand& out) const;
@@ -61,10 +70,14 @@ public:
   const ObstacleSafetyStatus& obstacleSafetyStatus() const;
   bool forwardMotionAllowed() const;
   SafetyStopReason lastSafetyStopReason() const;
+  void recordSafetyStop(SafetyStopReason reason);
   
   RangeSensorHealth rangeSensorHealth() const;
   uint16_t rangeConsecutiveInvalid() const;
   const ImuReading& imuReading() const;
+  SafetyState safetyState() const;
+  SafetyFault safetyFault() const;
+  uint32_t safetyStateChangedAtMs() const;
 
   ServoDiagnostics* diagnostics();
 
@@ -76,6 +89,7 @@ private:
   ServoDiagnostics _diagnostics;
   ObstacleSafety _safety;
   ImuMonitor _imu;
+  SafetySupervisor* _safetySupervisor = nullptr;
   Mood _mood = Mood::IDLE;
   bool _autonomyEnabled = false;
 

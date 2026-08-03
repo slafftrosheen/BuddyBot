@@ -96,6 +96,10 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
         <span id="rangeBadge">-- mm</span>
       </div>
       <div class="badge-row" style="margin-top: 8px;">
+        <span>Safety</span>
+        <span id="safetyBadge">--</span>
+      </div>
+      <div class="badge-row" style="margin-top: 8px;">
         <span>Firmware</span>
         <span id="firmwareBadge">--</span>
       </div>
@@ -181,7 +185,8 @@ const session = {
   hasDrive: true,
   hasManipulators: true,
   lastActionRunning: false,
-  forwardMotionBlocked: false
+  forwardMotionBlocked: false,
+  safetyState: "boot"
 };
 
 let accState = {1: false, 2: false, 3: false};
@@ -221,9 +226,9 @@ function updateRoleUI() {
   const isController = session.role === 'controller';
   const isActionRunning = session.lastActionRunning;
   
-  const driveControls = document.querySelectorAll('.dpad button, #btnArm');
+  const driveControls = document.querySelectorAll('.dpad button');
   driveControls.forEach(btn => {
-    const active = isController && session.hasDrive && !isActionRunning;
+    const active = isController && session.hasDrive && !isActionRunning && session.safetyState === 'armed';
     if (btn.dataset.mode === 'forward' && session.forwardMotionBlocked) {
       btn.disabled = true;
       btn.style.opacity = '0.3';
@@ -234,6 +239,10 @@ function updateRoleUI() {
       btn.style.border = '1px solid var(--border)';
     }
   });
+  const armButton = document.getElementById('btnArm');
+  armButton.disabled = !isController || !session.hasDrive ||
+    session.safetyState === 'boot' || session.safetyState === 'estop' || session.safetyState === 'fault';
+  armButton.style.opacity = armButton.disabled ? '0.5' : '1';
   
   const actionControls = document.querySelectorAll('.grid-3 button');
   actionControls.forEach(btn => {
@@ -284,6 +293,7 @@ function connect() {
         session.hasManipulators = data.hasManipulators;
         session.lastActionRunning = data.actionRunning;
         session.forwardMotionBlocked = data.forwardMotionBlocked;
+        session.safetyState = data.safetyState || 'boot';
         updateTelemetry(data);
         if (session.role === 'disconnected' || session.role === 'observer') {
           if (data.controllerPresent) session.role = 'busy';
@@ -309,7 +319,7 @@ function connect() {
           updateRoleUI();
         } else if (data.code === 'pairing_failed') {
           logMsg("Pairing failed", true);
-        } else if (data.code === 'not_controller' || data.code === 'bad_token' || data.code === 'superseded' || data.code === 'motors_locked') {
+        } else if (data.code === 'not_controller' || data.code === 'bad_token' || data.code === 'replayed_command' || data.code === 'superseded' || data.code === 'motors_locked') {
           stopDriveLoop();
         } else if (data.code === 'rate_limited') {
           // Disable pairing for 60s
@@ -354,6 +364,12 @@ function updateTelemetry(t) {
     }
   }
   document.getElementById('rangeBadge').textContent = rangeStr;
+  const safetyBadge = document.getElementById('safetyBadge');
+  const safetyFault = t.safetyFault && t.safetyFault !== 'none' ? ` (${t.safetyFault})` : '';
+  safetyBadge.textContent = `${t.safetyState || 'unknown'}${safetyFault}`;
+  safetyBadge.style.color = (t.safetyState === 'fault' || t.safetyState === 'estop')
+    ? 'var(--danger)'
+    : (t.safetyState === 'armed' ? 'var(--success)' : 'var(--text-dim)');
   document.getElementById('armedStatus').textContent = t.motorsArmed ? 'ARMED' : 'Disarmed';
   document.getElementById('armedStatus').style.color = t.motorsArmed ? 'var(--danger)' : 'var(--text-dim)';
   document.getElementById('motorPanel').className = t.motorsArmed ? 'panel armed' : 'panel disarmed';

@@ -14,10 +14,12 @@
 #include "ControlProtocol.h"
 #include "CommandParser.h"
 #include "ControlRouter.h"
+#include "SafetySupervisor.h"
 #include "AutonomyManager.h"
 #include "SystemStatus.h"
 #include "WifiControl.h"
 #include "BootDiagnostics.h"
+#include "SystemHealth.h"
 
 PersonaManager persona;
 RobotRenderer renderer;
@@ -28,10 +30,12 @@ RobotAPI robot;
 CommandParser parser;
 ControlProtocol protocol;
 ControlRouter router;
+SafetySupervisor safety;
 AutonomyManager autonomy;
 SystemStatus systemStatus;
 WifiControl wifiControl;
 BootDiagnostics bootDiag;
+SystemHealth systemHealth;
 
 String serialBuffer;
 
@@ -45,6 +49,17 @@ void setup() {
 
   Serial.begin(115200);
   randomSeed(esp_random());
+  systemHealth.begin();
+
+  SafetyPolicyConfig safetyConfig;
+  safetyConfig.manualOverrideMs = SAFETY_MANUAL_OVERRIDE_MS;
+  safetyConfig.imuMaxSampleAgeMs = IMU_MAX_SAMPLE_AGE_MS;
+  safetyConfig.imuMinimumAccelG = IMU_MIN_ACCEL_G;
+  safetyConfig.imuMaximumAccelG = IMU_MAX_ACCEL_G;
+  safetyConfig.imuMaximumTiltDeg = IMU_MAX_TILT_DEG;
+  safetyConfig.imuMaximumGyroDps = IMU_MAX_GYRO_DPS;
+  safety.configure(safetyConfig);
+  safety.begin();
 
   persona.begin();
   renderer.begin();
@@ -55,10 +70,13 @@ void setup() {
   }
 
   robot.begin(&persona, &hal, &actions);
+  robot.setSafetySupervisor(&safety);
 
   autonomy.begin(&robot);
-  systemStatus.begin(&robot, &hal, &bootDiag);
-  router.begin(&robot, &systemStatus);
+  systemStatus.begin(&robot, &hal, &bootDiag, &systemHealth);
+  router.begin(&robot, &systemStatus, &safety);
+  router.setDriveBase(hal.drive());
+  router.setAutonomyManager(&autonomy);
   router.setWifiControl(&wifiControl);
 
   wifiControl.begin(&router, &robot, &systemStatus);
@@ -94,26 +112,47 @@ void handleButtons() {
   bool bPressed = M5.BtnB.isPressed();
   
   static uint32_t chordStart = 0;
-  static bool chordConsumed = false;
+  static bool pairingRequested = false;
+  static bool physicalActionTriggered = false;
 
   if (aPressed && bPressed) {
     if (chordStart == 0) {
       chordStart = millis();
-    } else if (!chordConsumed && (millis() - chordStart > 350)) {
-      chordConsumed = true;
-      if (wifiControl.running() && !wifiControl.controllerPresent()) {
+      pairingRequested = false;
+      physicalActionTriggered = false;
+    }
+
+    const uint32_t heldMs = millis() - chordStart;
+    if (router.safetyState() == SafetyState::ESTOP) {
+      if (!physicalActionTriggered && heldMs >= PHYSICAL_ESTOP_RESET_HOLD_MS) {
+        router.clearPhysicalEmergencyStop();
+        physicalActionTriggered = true;
+      }
+    } else {
+      if (!physicalActionTriggered && heldMs >= PHYSICAL_ESTOP_HOLD_MS) {
+        router.physicalEmergencyStop();
+        physicalActionTriggered = true;
+      } else if (!pairingRequested && heldMs >= 350 &&
+                 wifiControl.running() && !wifiControl.controllerPresent()) {
         wifiControl.requestNewPairingCode();
+        pairingRequested = true;
       }
     }
-  } else if (!aPressed && !bPressed) {
-    chordStart = 0;
-    chordConsumed = false;
+
+    return;
   }
 
-  if (aClicked && !chordConsumed) {
+  const bool suppressClicks = pairingRequested || physicalActionTriggered;
+  if (!aPressed && !bPressed) {
+    chordStart = 0;
+    pairingRequested = false;
+    physicalActionTriggered = false;
+  }
+
+  if (aClicked && !suppressClicks) {
     robot.nextMood();
   }
-  if (bClicked && !chordConsumed) {
+  if (bClicked && !suppressClicks) {
     robot.nextPersona();
   }
 }
@@ -131,12 +170,9 @@ void handleSerial() {
           if (parser.parse(serialBuffer, cmd)) {
             cmd.source = ControlSource::SERIAL_CTRL;
 
-            if (cmd.kind == CommandKind::AUTONOMY_SET) {
-              autonomy.setEnabled(cmd.flag);
-              robot.setAutonomyEnabled(cmd.flag);
+            if (!router.execute(cmd)) {
+              Serial.println("ERR Command denied by safety policy");
             }
-
-            router.execute(cmd);
           } else {
             Serial.println("ERR Unknown command. Type HELP");
           }
@@ -164,20 +200,25 @@ void handleAutonomy() {
 
 void loop() {
   M5.update();
+  handleButtons();
   
   if (!bootDiag.isComplete()) {
     bootDiag.update();
-    return;
+    if (!bootDiag.isComplete()) {
+      systemHealth.feed();
+      return;
+    }
+    router.completeBoot();
   }
   
   robot.update();
+  router.updateSafety();
   handleAutonomy();
 
   if (ENABLE_WIFI_CONTROL) {
     wifiControl.update();
   }
 
-  handleButtons();
   handleSerial();
 
   DriveMode mode = DriveMode::STOPPED;
@@ -216,4 +257,5 @@ void loop() {
   rState.safetyState = robot.obstacleSafetyStatus().state;
 
   renderer.update(rState, robot.expressionEngine());
+  systemHealth.feed();
 }

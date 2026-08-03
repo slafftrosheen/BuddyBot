@@ -7,7 +7,8 @@ enum class ControlSource : uint8_t {
   WIFI,
   BLE,
   LOCAL_UI,
-  AUTONOMY
+  AUTONOMY,
+  EXPRESSION
 };
 
 enum class CommandKind : uint8_t {

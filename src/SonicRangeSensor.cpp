@@ -1,5 +1,7 @@
 #include "SonicRangeSensor.h"
 
+#include <math.h>
+
 uint16_t SonicRangeSensor::getMedian(uint16_t a, uint16_t b, uint16_t c) const {
   if ((a <= b && b <= c) || (c <= b && b <= a)) return b;
   if ((b <= a && a <= c) || (c <= a && a <= b)) return a;
@@ -10,7 +12,7 @@ bool SonicRangeSensor::begin() {
   _health = RangeSensorHealth::UNINITIALIZED;
   
   // Initialize the sensor via the existing Wire bus.
-  _sensor.begin(&Wire, 9, 10, SONIC_I2C_ADDR);
+  _sensor.begin(&Wire, I2C_SDA_PIN, I2C_SCL_PIN, SONIC_I2C_ADDR);
 
   // Verify connection by doing a simple I2C probe
   Wire.beginTransmission(SONIC_I2C_ADDR);
@@ -65,10 +67,13 @@ void SonicRangeSensor::update() {
 
   _lastAttemptMs = now;
   float distFloat = _sensor.getDistance();
-  uint16_t rawDist = (distFloat > 0) ? (uint16_t)distFloat : 0;
+  const bool finiteDistance = isfinite(distFloat);
+  uint16_t rawDist = finiteDistance && distFloat > 0.0f && distFloat <= 65535.0f
+    ? static_cast<uint16_t>(distFloat)
+    : 0;
   
-  bool sampleValid = true;
-  if (rawDist < SONIC_MIN_VALID_MM || rawDist > SONIC_MAX_VALID_MM) {
+  bool sampleValid = finiteDistance;
+  if (!sampleValid || rawDist < SONIC_MIN_VALID_MM || rawDist > SONIC_MAX_VALID_MM) {
     sampleValid = false;
   } else if (_reading.valid) {
     // Check for unrealistic spike
@@ -100,9 +105,11 @@ void SonicRangeSensor::update() {
     _health = RangeSensorHealth::READY;
   } else {
     _consecutiveInvalid++;
+    _reading.valid = false;
     if (_consecutiveInvalid >= SONIC_INVALID_SAMPLES_TO_FAULT) {
-      _reading.valid = false;
       _health = RangeSensorHealth::INVALID;
+    } else {
+      _health = RangeSensorHealth::STALE;
     }
   }
 }

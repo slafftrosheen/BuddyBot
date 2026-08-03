@@ -30,8 +30,8 @@ const RobotBuildConfig CUSTOM_BUILD = {
   JointControllerType::SERVO8_POSITION,
   JointControllerType::SERVO8_POSITION,
   AccessoryControllerType::SERVO8_POSITION,
-  AccessoryControllerType::SERVO8_POSITION,
-  AccessoryControllerType::SERVO8_POSITION,
+  AccessoryControllerType::NONE,
+  AccessoryControllerType::NONE,
   RangeSensorType::SONIC_I2C,
   false,
   false,
@@ -82,8 +82,8 @@ const NamedBuildProfile BUILD_PROFILES[] = {
       JointControllerType::SERVO8_POSITION,
       JointControllerType::SERVO8_POSITION,
       AccessoryControllerType::SERVO8_POSITION,
-      AccessoryControllerType::SERVO8_POSITION,
-      AccessoryControllerType::SERVO8_POSITION,
+      AccessoryControllerType::NONE,
+      AccessoryControllerType::NONE,
       RangeSensorType::SONIC_I2C,
       false,
       false,
@@ -150,8 +150,8 @@ const NamedBuildProfile BUILD_PROFILES[] = {
       JointControllerType::SERVO8_POSITION,
       JointControllerType::SERVO8_POSITION,
       AccessoryControllerType::SERVO8_POSITION,
-      AccessoryControllerType::SERVO8_POSITION,
-      AccessoryControllerType::SERVO8_POSITION,
+      AccessoryControllerType::NONE,
+      AccessoryControllerType::NONE,
       RangeSensorType::SONIC_I2C,
       false,
       false,
@@ -217,6 +217,16 @@ const char* getActiveBuildName() {
   return p ? p->name : "Custom";
 }
 
+HardwareManifest getActiveHardwareManifest() {
+  const NamedBuildProfile* profile = findBuildProfile(ACTIVE_BUILD_PROFILE);
+  return HardwareManifest{
+    HARDWARE_MANIFEST_VERSION,
+    profile ? profile->id : BuildProfileId::CUSTOM,
+    profile ? profile->name : "Custom",
+    getActiveBuildConfig()
+  };
+}
+
 const ServoChannelConfig* getActiveServoConfig() {
   if (ACTIVE_BUILD_PROFILE == BuildProfileId::SERVO8_TWO_WHEEL_MANIPULATOR) {
     return LEGACY_2WD_SERVO_CONFIG;
@@ -245,6 +255,44 @@ void printAllBuildProfiles() {
   }
 }
 
+static bool hasServoRole(
+  const ServoChannelConfig* servos,
+  ServoRole role,
+  bool continuousRotation
+) {
+  if (!servos) {
+    return false;
+  }
+
+  for (uint8_t i = 0; i < SERVO8_CHANNEL_COUNT; ++i) {
+    if (servos[i].enabled &&
+        servos[i].role == role &&
+        servos[i].continuousRotation == continuousRotation) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool isContinuousCalibrationValid(const ContinuousServoCalibration& calibration) {
+  if (calibration.minimumUs > calibration.maximumUs) {
+    return false;
+  }
+
+  return calibration.stopUs >= calibration.minimumUs &&
+         calibration.stopUs <= calibration.maximumUs &&
+         calibration.forwardUs >= calibration.minimumUs &&
+         calibration.forwardUs <= calibration.maximumUs &&
+         calibration.reverseUs >= calibration.minimumUs &&
+         calibration.reverseUs <= calibration.maximumUs;
+}
+
+static bool isPositionalCalibrationValid(const PositionalServoCalibration& calibration) {
+  return calibration.minimumDeg <= calibration.restDeg &&
+         calibration.restDeg <= calibration.maximumDeg &&
+         calibration.minimumPulseUs <= calibration.maximumPulseUs;
+}
+
 bool validateBuildConfig(const RobotBuildConfig& config, const ServoChannelConfig* servos) {
   bool valid = true;
   
@@ -259,20 +307,90 @@ bool validateBuildConfig(const RobotBuildConfig& config, const ServoChannelConfi
       return false;
     }
     
-    bool seen[8] = {false};
+    bool seenChannels[SERVO8_CHANNEL_COUNT] = {false};
+    bool seenRoles[static_cast<uint8_t>(ServoRole::ACCESSORY_1) + 1] = {false};
     for (int i = 0; i < 8; i++) {
       if (servos[i].enabled) {
-        if (servos[i].channel >= 8) {
+        if (servos[i].channel >= SERVO8_CHANNEL_COUNT) {
           Serial.printf("ERR: Invalid channel %u for role %u\n", servos[i].channel, (unsigned)servos[i].role);
           valid = false;
-        } else if (seen[servos[i].channel]) {
+        } else if (seenChannels[servos[i].channel]) {
           Serial.printf("ERR: Duplicate channel %u\n", servos[i].channel);
           valid = false;
         } else {
-          seen[servos[i].channel] = true;
+          seenChannels[servos[i].channel] = true;
+        }
+
+        const uint8_t role = static_cast<uint8_t>(servos[i].role);
+        if (servos[i].role == ServoRole::UNUSED ||
+            role > static_cast<uint8_t>(ServoRole::ACCESSORY_1)) {
+          Serial.printf("ERR: Invalid enabled servo role %u\n", role);
+          valid = false;
+        } else if (seenRoles[role]) {
+          Serial.printf("ERR: Duplicate servo role %u\n", role);
+          valid = false;
+        } else {
+          seenRoles[role] = true;
+        }
+
+        if (servos[i].continuousRotation) {
+          if (!isContinuousCalibrationValid(servos[i].continuous)) {
+            Serial.printf("ERR: Invalid continuous calibration for channel %u\n", servos[i].channel);
+            valid = false;
+          }
+        } else if (!isPositionalCalibrationValid(servos[i].positional)) {
+          Serial.printf("ERR: Invalid positional calibration for channel %u\n", servos[i].channel);
+          valid = false;
         }
       }
     }
+
+    if (config.driveType == DriveControllerType::SERVO8_CONTINUOUS) {
+      const bool frontDrivePresent =
+        hasServoRole(servos, ServoRole::DRIVE_FRONT_LEFT, true) &&
+        hasServoRole(servos, ServoRole::DRIVE_FRONT_RIGHT, true);
+      const bool rearLeftPresent = hasServoRole(servos, ServoRole::DRIVE_REAR_LEFT, true);
+      const bool rearRightPresent = hasServoRole(servos, ServoRole::DRIVE_REAR_RIGHT, true);
+      if (!frontDrivePresent || rearLeftPresent != rearRightPresent) {
+        Serial.println("ERR: Servo drive roles are incomplete");
+        valid = false;
+      }
+    }
+
+    if (config.headType == JointControllerType::SERVO8_POSITION &&
+        !hasServoRole(servos, ServoRole::HEAD, false)) {
+      Serial.println("ERR: Head servo role is missing");
+      valid = false;
+    }
+    if (config.leftArmType == JointControllerType::SERVO8_POSITION &&
+        !hasServoRole(servos, ServoRole::LEFT_ARM, false)) {
+      Serial.println("ERR: Left arm servo role is missing");
+      valid = false;
+    }
+    if (config.rightArmType == JointControllerType::SERVO8_POSITION &&
+        !hasServoRole(servos, ServoRole::RIGHT_ARM, false)) {
+      Serial.println("ERR: Right arm servo role is missing");
+      valid = false;
+    }
+    if (config.accessory1Type == AccessoryControllerType::SERVO8_POSITION &&
+        !hasServoRole(servos, ServoRole::ACCESSORY_1, false)) {
+      Serial.println("ERR: Accessory 1 servo role is missing");
+      valid = false;
+    }
+  }
+
+  if (config.headType == JointControllerType::ROLLER_UNIT ||
+      config.leftArmType == JointControllerType::ROLLER_UNIT ||
+      config.rightArmType == JointControllerType::ROLLER_UNIT ||
+      config.accessory1Type == AccessoryControllerType::ROLLER_UNIT) {
+    Serial.println("ERR: Roller joints are not supported by the active manifest");
+    valid = false;
+  }
+
+  if (config.driveType == DriveControllerType::ROLLER_UNIT &&
+      (!config.useRoller1ForDrive || !config.useRoller2ForDrive)) {
+    Serial.println("ERR: Roller drive requires two drive rollers");
+    valid = false;
   }
 
   if (config.accessory2Type != AccessoryControllerType::NONE ||

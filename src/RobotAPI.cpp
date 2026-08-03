@@ -1,6 +1,7 @@
 #include "RobotAPI.h"
 #include <M5Unified.h>
 #include "BuildProfiles.h"
+#include "SafetySupervisor.h"
 
 void RobotAPI::begin(
   PersonaManager* persona,
@@ -23,11 +24,16 @@ void RobotAPI::begin(
   _expressions.begin();
 }
 
+void RobotAPI::setSafetySupervisor(SafetySupervisor* supervisor) {
+  _safetySupervisor = supervisor;
+}
+
 void RobotAPI::update() {
   if (_hal) _hal->update();
   if (_actions) _actions->update();
-  _safety.update(rangeReading(), millis());
-  _imu.update(millis());
+  const uint32_t nowMs = millis();
+  _safety.update(rangeReading(), nowMs);
+  _imu.update(nowMs);
 
   if (_hal && _hal->drive() &&
       _hal->drive()->driveMode() == DriveMode::FORWARD &&
@@ -38,8 +44,15 @@ void RobotAPI::update() {
       _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE
         ? SafetyStopReason::RANGE_SENSOR_INVALID
         : SafetyStopReason::OBSTACLE_BLOCKED,
-      millis()
+      nowMs
     );
+    const RangeSensorHealth sensorHealth = rangeSensorHealth();
+    if (_safetySupervisor &&
+        _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE &&
+        (sensorHealth == RangeSensorHealth::INVALID ||
+         sensorHealth == RangeSensorHealth::UNAVAILABLE)) {
+      _safetySupervisor->emergencyStop(SafetyFault::RANGE_SENSOR_INVALID, nowMs);
+    }
   }
   
   if (obstacleDetected()) {
@@ -112,7 +125,9 @@ void RobotAPI::setMood(Mood mood, bool playSound) {
   } else if (_mood == Mood::CURIOUS) {
     _expressions.play(ExpressionId::THINK, 1200);
   } else if (_mood == Mood::SLEEPY) {
-    _actions->start(ActionId::SLEEP);
+    if (_actions && (!_safetySupervisor || _safetySupervisor->mayMoveManipulators())) {
+      _actions->start(ActionId::SLEEP);
+    }
     _expressions.play(ExpressionId::SLEEP_YAWN);
   }
 
@@ -136,28 +151,41 @@ const char* RobotAPI::personaName() const {
   return _persona->current().name;
 }
 
-void RobotAPI::armMotors() {
+bool RobotAPI::armMotors() {
   if (!ALLOW_MOTOR_ARMING) {
     _expressions.play(ExpressionId::WORRIED, 2000);
-    return;
+    return false;
   }
-  if (_hal->drive()) {
+  if (!_safetySupervisor || !_safetySupervisor->mayEnableDrive()) {
+    _expressions.play(ExpressionId::WORRIED, 2000);
+    return false;
+  }
+
+  if (_hal && _hal->drive()) {
     if (!_hal->drive()->isArmed()) {
        _expressions.play(ExpressionId::PROUD, 1500);
     }
     _hal->drive()->arm();
+    if (_hal->drive()->isArmed()) {
+      return true;
+    }
   }
+
+  _safetySupervisor->notifyArmFailed(millis());
+  return false;
 }
 
 void RobotAPI::disarmMotors() {
   clearRememberedDriveCommand();
-  _actions->cancel(true);
+  const bool returnManipulatorsToRest =
+    !_safetySupervisor || _safetySupervisor->mayMoveManipulators();
+  _actions->cancel(true, returnManipulatorsToRest);
   if (_hal && _hal->drive()) {
     _hal->drive()->disarm();
   }
   _safety.recordExternalStop(SafetyStopReason::DISARMED, millis());
   
-  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && _hal) {
+  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && returnManipulatorsToRest && _hal) {
     if (_hal->leftArm()) _hal->leftArm()->rest();
     if (_hal->rightArm()) _hal->rightArm()->rest();
     if (_hal->head()) _hal->head()->rest();
@@ -167,7 +195,9 @@ void RobotAPI::disarmMotors() {
 
 void RobotAPI::stopAll() {
   clearRememberedDriveCommand();
-  _actions->cancel(true);
+  const bool returnManipulatorsToRest =
+    !_safetySupervisor || _safetySupervisor->mayMoveManipulators();
+  _actions->cancel(true, returnManipulatorsToRest);
   if (_hal && _hal->drive()) {
     _hal->drive()->emergencyStop();
   }
@@ -177,7 +207,7 @@ void RobotAPI::stopAll() {
     _safety.recordExternalStop(SafetyStopReason::MANUAL_STOP, millis());
   }
 
-  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && _hal) {
+  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && returnManipulatorsToRest && _hal) {
     if (_hal->leftArm()) _hal->leftArm()->rest();
     if (_hal->rightArm()) _hal->rightArm()->rest();
     if (_hal->head()) _hal->head()->rest();
@@ -241,7 +271,7 @@ bool RobotAPI::manipulatorAvailable(ServoRole role) const {
 }
 
 void RobotAPI::moveJointTo(ServoRole role, int16_t angle, uint16_t durationMs) {
-  if (!_hal) return;
+  if (!_hal || (_safetySupervisor && !_safetySupervisor->mayMoveManipulators())) return;
   IJoint* joint = nullptr;
   switch (role) {
     case ServoRole::HEAD: joint = _hal->head(); break;
@@ -256,7 +286,7 @@ void RobotAPI::moveJointTo(ServoRole role, int16_t angle, uint16_t durationMs) {
 }
 
 void RobotAPI::restJoint(ServoRole role) {
-  if (!_hal) return;
+  if (!_hal || (_safetySupervisor && !_safetySupervisor->mayMoveManipulators())) return;
   IJoint* joint = nullptr;
   switch (role) {
     case ServoRole::HEAD: joint = _hal->head(); break;
@@ -270,10 +300,27 @@ void RobotAPI::restJoint(ServoRole role) {
   }
 }
 
-bool RobotAPI::move(DriveMode mode, uint16_t durationMs, bool cancelAction) {
+bool RobotAPI::move(DriveMode mode, uint16_t durationMs, bool cancelAction, ControlSource source) {
   if (cancelAction && _actions) _actions->cancel(false);
   if (!_hal || !_hal->drive()) return false;
   if (!isArmed()) return false;
+
+  if (mode == DriveMode::STOPPED) {
+    stopAll();
+    return true;
+  }
+
+  if (!_safetySupervisor ||
+      !_safetySupervisor->requestDrive(
+        mode == DriveMode::FORWARD,
+        source == ControlSource::AUTONOMY,
+        millis()
+      )) {
+    if (_hal && _hal->drive()) {
+      _hal->drive()->emergencyStop();
+    }
+    return false;
+  }
 
   if (!_safety.allowsDrive(mode)) {
     // Safety blocks this move
@@ -303,6 +350,9 @@ bool RobotAPI::move(DriveMode mode, uint16_t durationMs, bool cancelAction) {
 }
 
 void RobotAPI::action(ActionId actionId) {
+  if (_safetySupervisor && !_safetySupervisor->mayMoveManipulators()) {
+    return;
+  }
   _actions->start(actionId);
   
   if (actionId == ActionId::WAVE) {
@@ -331,7 +381,7 @@ const ExpressionEngine& RobotAPI::expressionEngine() const {
 }
 
 void RobotAPI::setAccessoryPosition(uint8_t index, bool active) {
-  if (!_hal) return;
+  if (!_hal || (_safetySupervisor && !_safetySupervisor->mayMoveManipulators())) return;
   IJoint* acc = _hal->accessory(index);
   if (!acc) {
     Serial.printf("ERR: Accessory %u not configured or invalid\n", index);
@@ -363,6 +413,12 @@ void RobotAPI::setAutonomyEnabled(bool enabled) {
 
 bool RobotAPI::autonomyEnabled() const {
   return _autonomyEnabled;
+}
+
+bool RobotAPI::autonomyMotionAllowed() const {
+  return _safetySupervisor &&
+         _safetySupervisor->autonomyEnabled() &&
+         _safetySupervisor->autonomyMotionAllowed(millis());
 }
 
 void RobotAPI::rememberDriveCommand(const DriveCommand& cmd) {
@@ -397,6 +453,10 @@ SafetyStopReason RobotAPI::lastSafetyStopReason() const {
   return _safety.status().lastStopReason;
 }
 
+void RobotAPI::recordSafetyStop(SafetyStopReason reason) {
+  _safety.recordExternalStop(reason, millis());
+}
+
 RangeSensorHealth RobotAPI::rangeSensorHealth() const {
   if (_hal && _hal->range()) return _hal->range()->health();
   return RangeSensorHealth::UNINITIALIZED;
@@ -409,6 +469,18 @@ uint16_t RobotAPI::rangeConsecutiveInvalid() const {
 
 const ImuReading& RobotAPI::imuReading() const {
   return _imu.reading();
+}
+
+SafetyState RobotAPI::safetyState() const {
+  return _safetySupervisor ? _safetySupervisor->state() : SafetyState::BOOT;
+}
+
+SafetyFault RobotAPI::safetyFault() const {
+  return _safetySupervisor ? _safetySupervisor->fault() : SafetyFault::BOOT_INCOMPLETE;
+}
+
+uint32_t RobotAPI::safetyStateChangedAtMs() const {
+  return _safetySupervisor ? _safetySupervisor->stateChangedAtMs() : 0;
 }
 
 

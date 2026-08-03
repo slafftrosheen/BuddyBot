@@ -15,6 +15,15 @@ enum class BootPhase : uint8_t {
   FAILED
 };
 
+struct BootDiagnosticStatus {
+  BootPhase phase = BootPhase::NOT_STARTED;
+  bool displayReady = false;
+  bool servoBusPresent = false;
+  bool sonicPresent = false;
+  bool driveStopped = false;
+  bool manipulatorsChecked = false;
+};
+
 class BootDiagnostics {
 public:
   void begin(RobotAPI* robot);
@@ -25,11 +34,13 @@ public:
   bool hasFailed() const { return _phase == BootPhase::FAILED; }
   
   const char* phaseName(BootPhase phase) const;
+  const BootDiagnosticStatus& status() const { return _status; }
 
 private:
   RobotAPI* _robot = nullptr;
   BootPhase _phase = BootPhase::NOT_STARTED;
   uint32_t _phaseStartTime = 0;
+  BootDiagnosticStatus _status;
   
   void advanceTo(BootPhase nextPhase);
 };

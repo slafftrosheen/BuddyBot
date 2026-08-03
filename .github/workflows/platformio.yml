@@ -15,7 +15,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - run: pip install platformio
+      - run: pip install platformio==6.1.19
       - run: cp src/arduino_secrets.example.h src/arduino_secrets.h
       - run: pio run -e buddybot_safe
       - run: pio run -e buddybot_bench
+      - run: pio test -e buddybot_test --without-uploading --without-testing

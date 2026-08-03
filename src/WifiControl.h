@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include <freertos/semphr.h>
 #include "Config.h"
 #include "ControlRouter.h"
 #include "RobotAPI.h"
@@ -15,11 +16,14 @@ struct QueuedCommand {
   uint32_t observedEpoch = 0;
   uint32_t requestId = 0;
   uint32_t clientId = 0;
+  uint32_t sessionGeneration = 0;
 };
 
 struct WifiClientState {
   uint32_t clientId = 0;
   bool connected = false;
+  uint32_t connectedSinceMs = 0;
+  uint32_t lastActivityMs = 0;
 
   uint32_t commandWindowStartedMs = 0;
   uint8_t commandsInWindow = 0;
@@ -38,6 +42,9 @@ struct WifiControllerSession {
   uint32_t lastAcceptedCommandMs = 0;
   uint32_t lastActiveDriveMs = 0;
   bool driveWatchdogStopped = false;
+  bool hasLastRequestId = false;
+  uint32_t lastRequestId = 0;
+  uint32_t generation = 0;
 };
 
 class WifiControl {
@@ -63,15 +70,29 @@ private:
   void broadcastEvents();
   void logEvent(const char* severity, const char* code);
   void generatePairingCode();
-  void revokeController();
+  void revokeController(SafetyFault fault = SafetyFault::CONTROLLER_DISCONNECTED);
   void generateToken(char* outBuffer);
   void sendEvents(uint32_t clientId);
   
   bool enqueueCommand(const QueuedCommand& cmd);
   bool dequeueCommand(QueuedCommand& cmd);
-  void requestEmergencyStopFromWifi(uint32_t clientId);
+  void clearQueuedCommands();
+  void requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fault);
   WifiClientState* getClientState(uint32_t clientId);
-  bool constantTimeEquals(const char* a, const char* b, size_t n);
+  bool constantTimeEquals(const char* a, const char* b, size_t n) const;
+  bool controllerMatches(
+    uint32_t clientId,
+    const WebParsedMessage& message,
+    uint32_t* sessionGeneration = nullptr
+  ) const;
+  bool acceptRequestId(uint32_t requestId, uint32_t sessionGeneration);
+  bool commandSessionCurrent(const QueuedCommand& command) const;
+  void refreshControllerLease(uint32_t clientId, uint32_t sessionGeneration, uint32_t nowMs);
+  bool acquireDispatchLock();
+  void releaseDispatchLock();
+  void recordPairFailure(uint32_t nowMs);
+  bool pairingRateLimited(uint32_t nowMs) const;
+  void evictIdleUnpairedClients(uint32_t nowMs);
 
   ControlRouter* _router = nullptr;
   RobotAPI* _robot = nullptr;
@@ -99,7 +120,15 @@ private:
   size_t _cmdQueueTail = 0;
   size_t _cmdQueueSize = 0;
   portMUX_TYPE _queueMux = portMUX_INITIALIZER_UNLOCKED;
+  mutable portMUX_TYPE _stateMux = portMUX_INITIALIZER_UNLOCKED;
+  SemaphoreHandle_t _dispatchMutex = nullptr;
 
   volatile bool _pendingStop = false;
   volatile uint32_t _pendingStopClientId = 0;
+  volatile SafetyFault _pendingStopFault = SafetyFault::DRIVE_WATCHDOG;
+
+  uint32_t _globalPairWindowStartedMs = 0;
+  uint8_t _globalFailedPairAttempts = 0;
+  uint32_t _pairingLockedUntilMs = 0;
+  uint32_t _nextSessionGeneration = 0;
 };
