@@ -15,7 +15,7 @@ For control commands, a `token` must be present, obtained via pairing.
 ### Handshake / Pairing
 Every message must include `"v": 1`. `hello`: Ask for initial status
 ```json
-{ "type": "hello" }
+{ "v": 1, "id": 1, "type": "hello" }
 ```
 
 `pair`: Submit the 8-digit pairing code displayed on the robot screen (spaces are accepted).
