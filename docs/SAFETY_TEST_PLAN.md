@@ -39,6 +39,7 @@ This document outlines the standard verification steps required to validate the 
 3. **Expected Result**:
    - Drive is denied.
    - `STATUS` shows `obstacle_safety=sensor_unavailable` or `last_stop_reason=range_sensor_invalid`.
+   - Reverse and turns remain available; only forward motion requires valid range data.
 
 ## 4. Web UI Disconnect / Keepalive
 1. Refresh the Web UI while actively driving forward (simulating a disconnect).
@@ -54,3 +55,8 @@ This document outlines the standard verification steps required to validate the 
    - Motors do NOT arm.
    - BuddyBot plays a WORRIED expression.
    - `STATUS` shows `motors_armed=false`.
+
+## 6. Action Motion Routing
+1. Temporarily enable `ALLOW_ACTION_DRIVE_MOVEMENT` only on an elevated test rig.
+2. Start `ACTION DANCE` with a clear range reading, then place an obstacle within 120mm before its forward step.
+3. **Expected Result**: the forward step is rejected by the same obstacle policy as a manual move; the action does not bypass safety routing.

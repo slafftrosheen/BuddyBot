@@ -18,44 +18,44 @@ SERVO TEST UNLOCK
 ```
 The robot should reply with `SERVO TEST UNLOCKED`. The safety routines will now allow direct pulse writing.
 
-## 3. Calibrating Continuous Drive Servos (Roles 6-9)
+## 3. Calibrating Continuous Drive Servos (Roles 1-4)
 For each wheel, you must find the pulse width where the motor stops spinning. Most continuous servos stop at 1500us.
 
-Channels:
-- 6: Front-Left
-- 7: Front-Right
-- 8: Rear-Left
-- 9: Rear-Right
+Servo roles used by `SERVO TEST`:
+- 1: Front-Left
+- 2: Rear-Left
+- 3: Front-Right
+- 4: Rear-Right
 
 Test the stop point for the Front-Left wheel:
 ```
-SERVO TEST 6 1500
+SERVO TEST 1 1500
 ```
 If the wheel slowly spins, adjust the pulse width up or down (e.g. `1490` or `1510`) until the wheel is completely stationary.
-Repeat for channels 7, 8, and 9. Update the values in `Servo8Bus` configuration if they deviate significantly from 1500us.
+Repeat for roles 2, 3, and 4. Update the corresponding calibration entry in `DEFAULT_4WD_SERVO_CONFIG` in `src/BuildProfiles.cpp` if it deviates significantly from 1500us.
 
-## 4. Calibrating Positional Manipulators (Roles 0-3)
+## 4. Calibrating Positional Manipulators (Roles 5-8)
 For each joint, test the safe limits.
 
 Channels:
-- 0: Head (Pan)
-- 1: Left Arm
-- 2: Right Arm
-- 3: Accessory
+- 5: Head (Pan)
+- 6: Left Arm
+- 7: Right Arm
+- 8: Accessory
 
 Test the left arm center point:
 ```
-JOINT MOVE 1 90
+JOINT MOVE 6 90
 ```
 Test the left arm up point:
 ```
-JOINT MOVE 1 150
+JOINT MOVE 6 150
 ```
 Test the left arm rest point:
 ```
-JOINT REST 1
+JOINT REST 6
 ```
-Check that the arm does not bind or stall at the extents. Update the default resting angles and limits in `src/Config.h` or `RobotHal.cpp` if they hit physical constraints.
+Check that the arm does not bind or stall at the extents. Update the default resting angles in `src/Config.h` and positional limits in `src/BuildProfiles.cpp` if they hit physical constraints.
 
 ## 5. Stopping the Test
 When finished, lock the diagnostic mode to restore safety router control:

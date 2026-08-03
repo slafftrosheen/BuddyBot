@@ -256,7 +256,7 @@ void RobotActions::updateCelebrate() {
     if (!_hal->drive()) return;
     if (stepElapsed(400)) {
       if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _robot->move(DriveMode::TURN_LEFT, 220);
+        _robot->move(DriveMode::TURN_LEFT, 220, false);
       }
       nextStep();
     }
@@ -267,7 +267,7 @@ void RobotActions::updateCelebrate() {
     if (!_hal->drive()) return;
     if (stepElapsed(280)) {
       if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _robot->move(DriveMode::TURN_RIGHT, 440);
+        _robot->move(DriveMode::TURN_RIGHT, 440, false);
       }
       nextStep();
     }
@@ -291,7 +291,7 @@ void RobotActions::updateDance() {
     if (leftArm) leftArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
     if (rightArm) rightArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
     if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
-      _robot->move(DriveMode::TURN_LEFT, 220);
+      _robot->move(DriveMode::TURN_LEFT, 220, false);
     }
     nextStep();
     return;
@@ -302,7 +302,7 @@ void RobotActions::updateDance() {
       if (leftArm) leftArm->moveTo(90, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (rightArm) rightArm->moveTo(90, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _robot->move(DriveMode::TURN_RIGHT, 440);
+        _robot->move(DriveMode::TURN_RIGHT, 440, false);
       }
       nextStep();
     }
@@ -314,7 +314,7 @@ void RobotActions::updateDance() {
       if (leftArm) leftArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (rightArm) rightArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _robot->move(DriveMode::FORWARD, 250);
+        _robot->move(DriveMode::FORWARD, 250, false);
       }
       nextStep();
     }

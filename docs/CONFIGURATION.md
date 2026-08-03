@@ -16,7 +16,7 @@ Example `src/arduino_secrets.h`:
 #define SECRET_WIFI_AP_PASSWORD "SuperSecret123"
 ```
 
-If `arduino_secrets.h` is not present, the system will fall back to default fallback credentials defined in `Config.h`.
+Copy `src/arduino_secrets.example.h` to `src/arduino_secrets.h` and replace both placeholders before building. The build intentionally fails if the file or either required definition is missing; there are no public fallback credentials.
 
 ## Hardware Configuration
 *   **ACTIVE_BUILD_PROFILE**: Selects the active build profile (e.g. 4-wheel drive, 2-wheel drive, roller drive). See `BUILD_PROFILES.md`.
@@ -28,6 +28,7 @@ The `SAFE DEFAULTS` section of `Config.h` contains hardcoded boundaries that pre
 
 *   `ALLOW_MOTOR_ARMING`: Hard switch allowing drive motors to spin.
 *   `ENABLE_OBSTACLE_SAFETY`: Enables the Sonic range sensor obstacle stop logic.
+*   `REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE`: Keeps forward motion disabled whenever range data is unavailable, stale, or invalid.
 *   `ENABLE_AUTONOMY_AT_BOOT`: Controls if the autonomy loop starts automatically.
 *   `ENABLE_CAUTIOUS_ROAM`: Controls if the robot roams automatically.
 

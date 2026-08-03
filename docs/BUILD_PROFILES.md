@@ -20,7 +20,7 @@ This is the standard baseline configuration for the `hardware-safety-beta` relea
 
 ### STICKY_SERVO_ROVER
 - **Drive**: Unit 8Servos (Continuous)
-- **Head/Arms/Accessories**: Unit 8Servos (Position)
+- **Head/Arms/Accessory 1**: Unit 8Servos (Position)
 - **Range Sensor**: Sonic I2C
 - Fills out all 8 channels for full articulation testing.
 
@@ -35,8 +35,8 @@ This is the standard baseline configuration for the `hardware-safety-beta` relea
 
 ### ACCESSORY_DEMO_RIG
 - **Drive**: None
-- **Head/Arms/Accessories**: Unit 8Servos (Position)
-- Useful for bench-testing servo channels without activating any continuous drive motors.
+- **Head/Arms/Accessory 1**: Unit 8Servos (Position)
+- Useful for bench-testing supported servo channels without activating continuous drive motors.
 
 ### CUSTOM
 - Uses the `CUSTOM_BUILD` structure defined in `BuildProfiles.cpp`. 
@@ -44,7 +44,7 @@ This is the standard baseline configuration for the `hardware-safety-beta` relea
 
 ## Validation
 
-The system runs a `validateBuildConfig()` check to ensure the chosen profile does not map multiple logical servo roles to the same physical hardware channel.
+The system runs `validateBuildConfig()` before initializing hardware. It rejects duplicate servo channels, obstacle-stop profiles without a range sensor, and accessory 2 or 3 controllers because this firmware only implements Accessory 1. A rejected profile leaves motion hardware unavailable and reports the reason over Serial.
 
 ## Usage
 

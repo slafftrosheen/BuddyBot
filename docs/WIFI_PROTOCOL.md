@@ -1,9 +1,9 @@
 # BuddyBot Wi-Fi Protocol
 
-BuddyBot implements a SoftAP with a captive portal that serves a WebSocket interface for browser control.
+BuddyBot implements a SoftAP that serves a WebSocket interface for browser control.
 
 ## Overview
-- **SSID / Password**: Configured in `src/arduino_secrets.h` or `src/Config.h`.
+- **SSID / Password**: Must be provisioned in the ignored `src/arduino_secrets.h`; copy the example file and replace its placeholders before building.
 - **IP**: `192.168.4.1` (SoftAP default).
 - **HTTP**: Port 80 serves `WebUiPage.h` (HTML/JS/CSS).
 - **WebSocket**: `ws://192.168.4.1/ws`
@@ -13,30 +13,30 @@ The WebSocket accepts JSON payloads. All messages include an optional `id` for t
 For control commands, a `token` must be present, obtained via pairing.
 
 ### Handshake / Pairing
-`hello`: Ask for initial status
+Every message must include `"v": 1`. `hello`: Ask for initial status
 ```json
 { "type": "hello" }
 ```
 
-`pair`: Submit the 4-digit PIN displayed on the robot screen
+`pair`: Submit the 8-digit pairing code displayed on the robot screen (spaces are accepted).
 ```json
-{ "type": "pair", "code": "1234" }
+{ "v": 1, "id": 1, "type": "pair", "code": "1234 5678" }
 ```
 If successful, the robot replies with `{"type":"paired", "token":"..."}`. This token must be included in all subsequent control messages.
 
 ### Control Commands (Require Token)
-`arm` / `disarm`: Enable or disable motor output
+`arm` / `disarm`: Enable or disable motor output. These and all non-stop control commands require both `id` and `token`.
 ```json
-{ "type": "arm", "token": "..." }
+{ "v": 1, "id": 2, "type": "arm", "token": "..." }
 ```
 
 `move`: Drive in a specific direction for a set duration (max 250ms per message; keepalives expected)
 ```json
-{ "type": "move", "mode": "forward", "durationMs": 250, "token": "..." }
+{ "v": 1, "id": 3, "type": "move", "mode": "forward", "durationMs": 250, "token": "..." }
 ```
 Valid modes: `forward`, `reverse`, `turn_left`, `turn_right`.
 
-`stop`: Immediately stop drive motors
+`stop`: Immediately stop drive motors. A paired controller may issue this with or without a token.
 ```json
 { "type": "stop", "token": "..." }
 ```

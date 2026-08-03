@@ -56,7 +56,8 @@ public:
   const char* apIp() const;
 
 private:
-  void startSoftAP();
+  bool startSoftAP();
+  void syncStatus();
   void handleWebSocketMessage(void* arg, uint8_t* data, size_t len, uint32_t clientId);
   void broadcastTelemetry();
   void broadcastEvents();

@@ -38,7 +38,7 @@ public:
   void restJoint(ServoRole role);
   void setAccessoryPosition(uint8_t index, bool active);
 
-  bool move(DriveMode mode, uint16_t durationMs);
+  bool move(DriveMode mode, uint16_t durationMs, bool cancelAction = true);
   void action(ActionId actionId);
 
   void playExpression(ExpressionId expression, uint16_t durationMs = 0);

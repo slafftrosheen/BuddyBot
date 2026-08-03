@@ -50,7 +50,9 @@ void setup() {
   renderer.begin();
 
   RobotBuildConfig activeBuild = getActiveBuildConfig();
-  hal.begin(activeBuild);
+  if (!hal.begin(activeBuild)) {
+    Serial.println("HAL initialization failed; motion hardware is unavailable.");
+  }
 
   robot.begin(&persona, &hal, &actions);
 
