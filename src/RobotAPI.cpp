@@ -14,7 +14,7 @@ void RobotAPI::begin(
   _autonomyEnabled = false;
   
   if (_actions) {
-    _actions->begin(hal, persona);
+    _actions->begin(hal, persona, this);
   }
   
   _diagnostics.begin(hal);
@@ -255,8 +255,8 @@ void RobotAPI::restJoint(ServoRole role) {
   }
 }
 
-bool RobotAPI::move(DriveMode mode, uint16_t durationMs) {
-  _actions->cancel(false);
+bool RobotAPI::move(DriveMode mode, uint16_t durationMs, bool cancelAction) {
+  if (cancelAction && _actions) _actions->cancel(false);
   if (!_hal || !_hal->drive()) return false;
   if (!isArmed()) return false;
 

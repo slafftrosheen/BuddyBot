@@ -250,7 +250,10 @@ bool validateBuildConfig(const RobotBuildConfig& config, const ServoChannelConfi
   
   // Check for duplicate servo channels if using SERVO8
   if (config.driveType == DriveControllerType::SERVO8_CONTINUOUS ||
-      config.headType == JointControllerType::SERVO8_POSITION) {
+      config.headType == JointControllerType::SERVO8_POSITION ||
+      config.leftArmType == JointControllerType::SERVO8_POSITION ||
+      config.rightArmType == JointControllerType::SERVO8_POSITION ||
+      config.accessory1Type == AccessoryControllerType::SERVO8_POSITION) {
     if (!servos) {
       Serial.println("ERR: Servo config missing");
       return false;
@@ -270,6 +273,17 @@ bool validateBuildConfig(const RobotBuildConfig& config, const ServoChannelConfi
         }
       }
     }
+  }
+
+  if (config.accessory2Type != AccessoryControllerType::NONE ||
+      config.accessory3Type != AccessoryControllerType::NONE) {
+    Serial.println("ERR: Accessory 2 and 3 controllers are not supported");
+    valid = false;
+  }
+
+  if (config.enableObstacleStop && config.rangeSensorType == RangeSensorType::NONE) {
+    Serial.println("ERR: Obstacle stop requires a range sensor");
+    valid = false;
   }
   
   return valid;

@@ -14,7 +14,10 @@ bool WifiControl::start() {
   if (_running) return true;
 
   if (WIFI_START_SOFT_AP) {
-    startSoftAP();
+    if (!startSoftAP()) {
+      logEvent("ERROR", "wifi_ap_start_failed");
+      return false;
+    }
   }
   
   char ipBuf[32];
@@ -125,9 +128,18 @@ uint8_t WifiControl::clientCount() const { return _ws ? _ws->count() : 0; }
 const char* WifiControl::apSsid() const { return _apSsid; }
 const char* WifiControl::apIp() const { return _apIp; }
 
-void WifiControl::startSoftAP() {
+bool WifiControl::startSoftAP() {
+  if (WIFI_AP_SSID[0] == '\0' || WIFI_AP_PASSWORD[0] == '\0') {
+    return false;
+  }
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
+  return WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASSWORD);
+}
+
+void WifiControl::syncStatus() {
+  if (_status) {
+    _status->setWifiStatus(_running, _apSsid, _apIp, clientCount(), _session.active, pairingAvailable());
+  }
 }
 
 void WifiControl::logEvent(const char* severity, const char* code) {
@@ -382,6 +394,7 @@ void WifiControl::update() {
   }
 
   if (_ws) _ws->cleanupClients();
+  syncStatus();
 
   if (_session.active) {
     if (now > _session.leaseExpiryMs) {
