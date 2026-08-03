@@ -40,7 +40,7 @@ bool RobotHal::begin(const RobotBuildConfig& config) {
   _config = config;
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, I2C_FREQUENCY);
-   
+
   const ServoChannelConfig* servoConfig = getActiveServoConfig();
   if (!validateBuildConfig(config, servoConfig)) {
     Serial.println("ERR: Unsupported or invalid build profile");
