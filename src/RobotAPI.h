@@ -7,6 +7,7 @@
 #include "ActuatorState.h"
 #include "ServoDiagnostics.h"
 #include "ObstacleSafety.h"
+#include "ImuMonitor.h"
 
 class RobotAPI {
 public:
@@ -63,6 +64,7 @@ public:
   
   RangeSensorHealth rangeSensorHealth() const;
   uint16_t rangeConsecutiveInvalid() const;
+  const ImuReading& imuReading() const;
 
   ServoDiagnostics* diagnostics();
 
@@ -73,6 +75,7 @@ private:
   ExpressionEngine _expressions;
   ServoDiagnostics _diagnostics;
   ObstacleSafety _safety;
+  ImuMonitor _imu;
   Mood _mood = Mood::IDLE;
   bool _autonomyEnabled = false;
 

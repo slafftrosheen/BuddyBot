@@ -65,6 +65,8 @@ The robot continuously broadcasts telemetry via WebSocket to all connected clien
 }
 ```
 
+When the built-in BMI270 is available, telemetry also includes `imuAvailable`, `imuValid`, `imuSampleTimeMs`, `accelG` (`x`, `y`, `z` in g), and `gyroDps` (`x`, `y`, `z` in degrees per second). These fields are informational and do not alter motion or safety behavior.
+
 ## System Events
 The robot broadcasts system events for diagnostics and logging:
 ```json

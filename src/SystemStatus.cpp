@@ -52,6 +52,11 @@ void SystemStatus::printStatus() const {
 
   Serial.printf("obstacle=%s\n", (_robot && _robot->obstacleDetected()) ? "true" : "false");
   Serial.printf("mood=%u\n", _robot ? unsigned(_robot->getMood()) : 0);
+  if (_robot) {
+    const ImuReading& imu = _robot->imuReading();
+    Serial.printf("imu_available=%s\n", imu.available ? "true" : "false");
+    Serial.printf("imu_valid=%s\n", imu.valid ? "true" : "false");
+  }
   
   Serial.printf("wifi_running=%s\n", _wifiRunning ? "true" : "false");
   if (_wifiRunning) {

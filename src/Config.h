@@ -29,6 +29,9 @@ constexpr uint16_t RANGE_UI_UPDATE_DELTA_MM = 20;
 constexpr bool ENABLE_PERSONA_PARTICLES = true;
 constexpr uint8_t MAX_PERSONA_PARTICLES = 8;
 
+// ---------- Built-in BMI270 IMU ----------
+constexpr uint16_t IMU_SAMPLE_INTERVAL_MS = 100;
+
 // ---------- I2C bus ----------
 constexpr int I2C_SDA_PIN = 9;
 constexpr int I2C_SCL_PIN = 10;

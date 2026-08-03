@@ -193,6 +193,11 @@ bool ControlProtocol::parsePipeCommand(String line, RobotCommand& out) {
     return false;
   }
 
+  if (op == "IMU" && tokenAt(line, 2, '|') == "STATUS") {
+    out.kind = CommandKind::CTRL_IMU_STATUS;
+    return true;
+  }
+
   return false;
 }
 
@@ -213,6 +218,7 @@ bool ControlProtocol::parseLegacyCommand(String line, RobotCommand& out) {
   if (line == "DIAG BOOT") { out.kind = CommandKind::DIAG_BOOT; return true; }
   if (line == "EVENTS") { out.kind = CommandKind::PRINT_EVENTS; return true; }
   if (line == "SENSOR STATUS") { out.kind = CommandKind::CTRL_SENSOR_STATUS; return true; }
+  if (line == "IMU STATUS") { out.kind = CommandKind::CTRL_IMU_STATUS; return true; }
   if (line == "SAFETY STATUS") { out.kind = CommandKind::CTRL_SAFETY_STATUS; return true; }
   if (line == "AUTONOMY STATUS") { out.kind = CommandKind::CTRL_AUTONOMY_STATUS; return true; }
   if (line == "AUTONOMY ON") { out.kind = CommandKind::AUTONOMY_SET; out.flag = true; return true; }
@@ -337,6 +343,7 @@ void ControlProtocol::printHelp() const {
   Serial.println("STATUS");
   Serial.println("AUTONOMY ON|OFF");
   Serial.println("WIFI STATUS|ON|OFF|PAIR");
+  Serial.println("IMU STATUS");
 
   Serial.println("Pipe protocol:");
   Serial.println("CMD|ARM");
@@ -348,4 +355,5 @@ void ControlProtocol::printHelp() const {
   Serial.println("CMD|STATUS");
   Serial.println("CMD|AUTONOMY|ON");
   Serial.println("CMD|WIFI|STATUS");
+  Serial.println("CMD|IMU|STATUS");
 }

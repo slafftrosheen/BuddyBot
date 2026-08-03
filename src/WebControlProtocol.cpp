@@ -328,6 +328,19 @@ String WebControlProtocol::generateTelemetry(const RobotTelemetry& t) {
   if (t.rangeSensorHealth) doc["rangeSensorHealth"] = t.rangeSensorHealth;
   doc["forwardMotionBlocked"] = t.forwardMotionBlocked;
   doc["actionRunning"] = t.actionRunning;
+  doc["imuAvailable"] = t.imuAvailable;
+  doc["imuValid"] = t.imuValid;
+  if (t.imuValid) {
+    doc["imuSampleTimeMs"] = t.imuSampleTimeMs;
+    JsonObject accel = doc["accelG"].to<JsonObject>();
+    accel["x"] = t.accelXG;
+    accel["y"] = t.accelYG;
+    accel["z"] = t.accelZG;
+    JsonObject gyro = doc["gyroDps"].to<JsonObject>();
+    gyro["x"] = t.gyroXDps;
+    gyro["y"] = t.gyroYDps;
+    gyro["z"] = t.gyroZDps;
+  }
 
   String out;
   serializeJson(doc, out);

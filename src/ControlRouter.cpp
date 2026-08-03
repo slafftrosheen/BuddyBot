@@ -150,6 +150,18 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       return true;
     }
 
+    case CommandKind::CTRL_IMU_STATUS: {
+      const ImuReading& imu = _robot->imuReading();
+      Serial.printf("imu_available=%s\n", imu.available ? "true" : "false");
+      Serial.printf("imu_valid=%s\n", imu.valid ? "true" : "false");
+      if (imu.valid) {
+        Serial.printf("imu_sample_time_ms=%u\n", imu.sampleTimeMs);
+        Serial.printf("imu_accel_g=%.3f,%.3f,%.3f\n", imu.accelXG, imu.accelYG, imu.accelZG);
+        Serial.printf("imu_gyro_dps=%.3f,%.3f,%.3f\n", imu.gyroXDps, imu.gyroYDps, imu.gyroZDps);
+      }
+      return true;
+    }
+
     case CommandKind::CTRL_SAFETY_STATUS: {
       const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
       const char* sStr = "unknown";

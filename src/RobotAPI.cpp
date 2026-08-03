@@ -19,6 +19,7 @@ void RobotAPI::begin(
   
   _diagnostics.begin(hal);
   _safety.begin();
+  _imu.begin();
   _expressions.begin();
 }
 
@@ -26,6 +27,7 @@ void RobotAPI::update() {
   if (_hal) _hal->update();
   if (_actions) _actions->update();
   _safety.update(rangeReading(), millis());
+  _imu.update(millis());
   
   if (obstacleDetected()) {
     _expressions.notifyObstacle();
@@ -390,6 +392,10 @@ RangeSensorHealth RobotAPI::rangeSensorHealth() const {
 uint16_t RobotAPI::rangeConsecutiveInvalid() const {
   if (_hal && _hal->range()) return _hal->range()->consecutiveInvalidSamples();
   return 0;
+}
+
+const ImuReading& RobotAPI::imuReading() const {
+  return _imu.reading();
 }
 
 

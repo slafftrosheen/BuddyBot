@@ -21,6 +21,14 @@ void test_serial_parser_rejects_unknown_command() {
   TEST_ASSERT_FALSE(protocol.parseLine("CMD|MOVE|UP|250", command));
 }
 
+void test_serial_imu_status_is_parsed() {
+  ControlProtocol protocol;
+  RobotCommand command = {};
+
+  TEST_ASSERT_TRUE(protocol.parseLine("IMU STATUS", command));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::CTRL_IMU_STATUS), static_cast<uint8_t>(command.kind));
+}
+
 void test_web_move_requires_a_token() {
   WebControlProtocol protocol;
   WebParsedMessage message = {};
@@ -55,6 +63,7 @@ void setup() {
   UNITY_BEGIN();
   RUN_TEST(test_serial_pipe_move_is_parsed);
   RUN_TEST(test_serial_parser_rejects_unknown_command);
+  RUN_TEST(test_serial_imu_status_is_parsed);
   RUN_TEST(test_web_move_requires_a_token);
   RUN_TEST(test_web_pairing_accepts_display_spacing);
   RUN_TEST(test_web_parser_rejects_unsupported_version);
