@@ -593,7 +593,7 @@ void WifiControl::broadcastTelemetry() {
     t.gyroYDps = imu.gyroYDps;
     t.gyroZDps = imu.gyroZDps;
   }
-  
+
   String telemetryJson = _protocol.generateTelemetry(t);
   if (_ws) _ws->textAll(telemetryJson);
 }

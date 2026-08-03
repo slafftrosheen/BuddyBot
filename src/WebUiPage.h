@@ -390,7 +390,7 @@ function updateTelemetry(t) {
   document.getElementById('gyroBadge').textContent = t.imuValid
     ? `${t.gyroDps.x.toFixed(1)}, ${t.gyroDps.y.toFixed(1)}, ${t.gyroDps.z.toFixed(1)} °/s`
     : '--';
-   
+
   updateRoleUI();
 }
 
