@@ -43,7 +43,9 @@ uint16_t RobotActions::timeoutFor(ActionId action) const {
 }
 
 void RobotActions::start(ActionId action) {
-  if (_hal == nullptr) {
+  if (_hal == nullptr ||
+      (_robot && _robot->safetyState() != SafetyState::DISARMED &&
+       _robot->safetyState() != SafetyState::ARMED)) {
     return;
   }
 
@@ -128,6 +130,12 @@ void RobotActions::nextStep() {
 
 void RobotActions::update() {
   if (_action == ActionId::NONE || _hal == nullptr) {
+    return;
+  }
+  if (_robot &&
+      _robot->safetyState() != SafetyState::DISARMED &&
+      _robot->safetyState() != SafetyState::ARMED) {
+    cancel(true, false);
     return;
   }
 

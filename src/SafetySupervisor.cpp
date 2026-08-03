@@ -77,7 +77,7 @@ void SafetySupervisor::update(const SafetyInputs& inputs, uint32_t nowMs) {
 
   if (_state == SafetyState::ARMED && _inputs.driveForward) {
     const SafetyFault fault = faultForDrive(true, false, nowMs);
-    if (fault != SafetyFault::NONE) {
+    if (fault != SafetyFault::NONE && fault != SafetyFault::OBSTACLE_BLOCKED) {
       latchFault(fault, nowMs);
       return;
     }
@@ -134,7 +134,9 @@ bool SafetySupervisor::requestDrive(bool forward, bool autonomous, uint32_t nowM
 
   const SafetyFault fault = faultForDrive(forward, autonomous, nowMs);
   if (fault != SafetyFault::NONE) {
-    latchFault(fault, nowMs);
+    if (fault != SafetyFault::OBSTACLE_BLOCKED) {
+      latchFault(fault, nowMs);
+    }
     return false;
   }
 
@@ -332,9 +334,6 @@ SafetyFault SafetySupervisor::faultForDrive(bool forward, bool autonomous, uint3
 SafetyFault SafetySupervisor::faultForAutonomy(uint32_t nowMs) const {
   if (!_inputs.rangeValid) {
     return SafetyFault::RANGE_SENSOR_INVALID;
-  }
-  if (_inputs.forwardMotionBlocked) {
-    return SafetyFault::OBSTACLE_BLOCKED;
   }
   if (!_inputs.imuAvailable) {
     return SafetyFault::IMU_UNAVAILABLE;

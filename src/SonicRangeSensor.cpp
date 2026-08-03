@@ -105,9 +105,11 @@ void SonicRangeSensor::update() {
     _health = RangeSensorHealth::READY;
   } else {
     _consecutiveInvalid++;
+    _reading.valid = false;
     if (_consecutiveInvalid >= SONIC_INVALID_SAMPLES_TO_FAULT) {
-      _reading.valid = false;
       _health = RangeSensorHealth::INVALID;
+    } else {
+      _health = RangeSensorHealth::STALE;
     }
   }
 }

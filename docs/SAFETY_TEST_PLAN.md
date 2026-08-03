@@ -22,14 +22,14 @@ This document outlines the standard verification steps required to validate the 
 3. Command forward drive: `MOVE FORWARD 2000` via Serial or hold the Web UI Forward button.
 4. While driving forward, place an obstacle < 120mm in front of the Sonic sensor.
 5. **Expected Result**: 
-   - Motors stop and disarm immediately.
+   - Motors stop immediately, but the robot remains armed for a bounded reverse/turn recovery.
    - Expression changes to WORRIED/SCARED.
-   - `STATUS` shows `safety_state=fault`, `safety_fault=obstacle_blocked`, and `last_stop_reason=obstacle_blocked`.
+   - `STATUS` shows `last_stop_reason=obstacle_blocked`; `safety_state` remains `armed` unless another fault is present.
 6. Command forward drive again while the obstacle is still present.
 7. **Expected Result**: 
    - Motors do not spin.
    - System logs or returns an `obstacle_blocked` warning.
-8. Clear the obstacle, verify a healthy range reading, then explicitly arm before issuing another movement command.
+8. Verify a reverse or turn command remains available for recovery, then clear the obstacle before commanding forward motion.
 
 ## 3. Sensor Failure and Watchdog
 1. While armed, unplug the Sonic sensor from the I2C port.
@@ -59,6 +59,7 @@ This document outlines the standard verification steps required to validate the 
 2. Hold both device buttons for at least `PHYSICAL_ESTOP_HOLD_MS`.
 3. **Expected Result**:
    - Drive output stops immediately and remains disarmed.
+   - Active manipulator motion is cancelled without commanding a new rest pose.
    - `STATUS` reports `safety_state=estop` and `safety_fault=physical_estop`.
 4. Verify serial and Wi-Fi arm/move requests are denied.
 5. Hold both buttons for `PHYSICAL_ESTOP_RESET_HOLD_MS`.

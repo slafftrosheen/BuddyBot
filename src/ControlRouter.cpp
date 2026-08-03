@@ -123,6 +123,8 @@ void ControlRouter::emergencyStop(SafetyFault fault) {
     return;
   }
 
+  _currentEpoch++;
+  _lastInterventionEpoch = _currentEpoch;
   if (_safety) {
     _safety->emergencyStop(fault, millis());
   }
@@ -171,6 +173,8 @@ void ControlRouter::physicalEmergencyStop() {
     return;
   }
 
+  _currentEpoch++;
+  _lastInterventionEpoch = _currentEpoch;
   if (_safety) {
     _safety->physicalEstop(millis());
   }
@@ -239,6 +243,7 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
         return false;
       }
       if (!_safety || !_safety->requestArm(buildSafetyInputs(), millis())) {
+        updateSafety();
         recordSafetyTransition();
         return false;
       }
@@ -271,8 +276,13 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       _robot->nextPersona();
       return true;
 
-    case CommandKind::MOVE:
-      return _robot->move(cmd.driveMode, cmd.durationMs, true, cmd.source);
+    case CommandKind::MOVE: {
+      const bool moved = _robot->move(cmd.driveMode, cmd.durationMs, true, cmd.source);
+      if (!moved) {
+        updateSafety();
+      }
+      return moved;
+    }
 
     case CommandKind::ACTION:
       _robot->action(cmd.action);
@@ -427,6 +437,7 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
 
     case CommandKind::AUTONOMY_SET:
       if (!_safety || !_safety->requestAutonomy(cmd.flag, millis())) {
+        updateSafety();
         recordSafetyTransition();
         return false;
       }

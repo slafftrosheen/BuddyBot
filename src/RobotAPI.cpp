@@ -46,13 +46,9 @@ void RobotAPI::update() {
         : SafetyStopReason::OBSTACLE_BLOCKED,
       nowMs
     );
-    if (_safetySupervisor) {
-      _safetySupervisor->emergencyStop(
-        _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE
-          ? SafetyFault::RANGE_SENSOR_INVALID
-          : SafetyFault::OBSTACLE_BLOCKED,
-        nowMs
-      );
+    if (_safetySupervisor &&
+        _safety.status().state == ObstacleSafetyState::SENSOR_UNAVAILABLE) {
+      _safetySupervisor->emergencyStop(SafetyFault::RANGE_SENSOR_INVALID, nowMs);
     }
   }
   
@@ -186,7 +182,7 @@ void RobotAPI::disarmMotors() {
   }
   _safety.recordExternalStop(SafetyStopReason::DISARMED, millis());
   
-  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && _hal) {
+  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && returnManipulatorsToRest && _hal) {
     if (_hal->leftArm()) _hal->leftArm()->rest();
     if (_hal->rightArm()) _hal->rightArm()->rest();
     if (_hal->head()) _hal->head()->rest();
@@ -208,7 +204,7 @@ void RobotAPI::stopAll() {
     _safety.recordExternalStop(SafetyStopReason::MANUAL_STOP, millis());
   }
 
-  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && _hal) {
+  if (RETURN_MANIPULATORS_ON_SAFETY_STOP && returnManipulatorsToRest && _hal) {
     if (_hal->leftArm()) _hal->leftArm()->rest();
     if (_hal->rightArm()) _hal->rightArm()->rest();
     if (_hal->head()) _hal->head()->rest();
@@ -287,7 +283,7 @@ void RobotAPI::moveJointTo(ServoRole role, int16_t angle, uint16_t durationMs) {
 }
 
 void RobotAPI::restJoint(ServoRole role) {
-  if (!_hal) return;
+  if (!_hal || (_safetySupervisor && !_safetySupervisor->mayMoveManipulators())) return;
   IJoint* joint = nullptr;
   switch (role) {
     case ServoRole::HEAD: joint = _hal->head(); break;
@@ -317,8 +313,8 @@ bool RobotAPI::move(DriveMode mode, uint16_t durationMs, bool cancelAction, Cont
         source == ControlSource::AUTONOMY,
         millis()
       )) {
-    if (_safetySupervisor && _safetySupervisor->consumeDisarmRequest()) {
-      disarmMotors();
+    if (_hal && _hal->drive()) {
+      _hal->drive()->emergencyStop();
     }
     return false;
   }

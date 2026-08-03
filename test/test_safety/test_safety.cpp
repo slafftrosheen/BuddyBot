@@ -63,6 +63,24 @@ void test_manual_control_preempts_autonomy_until_lease_expires() {
   TEST_ASSERT_TRUE(supervisor.requestDrive(false, true, 800));
 }
 
+void test_obstacle_blocks_forward_without_latching_autonomy_fault() {
+  SafetySupervisor supervisor;
+  SafetyInputs inputs = safeInputs();
+  supervisor.completeBoot(inputs, 100);
+  TEST_ASSERT_TRUE(supervisor.requestArm(inputs, 110));
+  TEST_ASSERT_TRUE(supervisor.requestAutonomy(true, 120));
+
+  inputs.forwardMotionBlocked = true;
+  inputs.driveForward = true;
+  supervisor.update(inputs, 130);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(SafetyState::ARMED), static_cast<uint8_t>(supervisor.state()));
+  TEST_ASSERT_FALSE(supervisor.consumeDisarmRequest());
+  inputs.driveForward = false;
+  TEST_ASSERT_FALSE(supervisor.requestDrive(true, true, 140));
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(SafetyState::ARMED), static_cast<uint8_t>(supervisor.state()));
+  TEST_ASSERT_TRUE(supervisor.requestDrive(false, true, 150));
+}
+
 void test_physical_estop_requires_local_reset_before_rearm() {
   SafetySupervisor supervisor;
   SafetyInputs inputs = safeInputs();
@@ -81,6 +99,7 @@ void setup() {
   RUN_TEST(test_supervisor_requires_boot_and_explicit_arm);
   RUN_TEST(test_forward_sensor_failure_latches_fault_and_disarm_request);
   RUN_TEST(test_manual_control_preempts_autonomy_until_lease_expires);
+  RUN_TEST(test_obstacle_blocks_forward_without_latching_autonomy_fault);
   RUN_TEST(test_physical_estop_requires_local_reset_before_rearm);
   UNITY_END();
 }

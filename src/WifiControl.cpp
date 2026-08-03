@@ -12,6 +12,13 @@ void WifiControl::begin(ControlRouter* router, RobotAPI* robot, SystemStatus* st
 bool WifiControl::start() {
   if (!ENABLE_WIFI_CONTROL) return false;
   if (_running) return true;
+  if (_dispatchMutex == nullptr) {
+    _dispatchMutex = xSemaphoreCreateMutex();
+    if (_dispatchMutex == nullptr) {
+      logEvent("ERROR", "wifi_dispatch_lock_failed");
+      return false;
+    }
+  }
 
   portENTER_CRITICAL(&_stateMux);
   _session = {};
@@ -21,6 +28,7 @@ bool WifiControl::start() {
   _globalPairWindowStartedMs = millis();
   _globalFailedPairAttempts = 0;
   _pairingLockedUntilMs = 0;
+  _nextSessionGeneration = 0;
   portEXIT_CRITICAL(&_stateMux);
   portENTER_CRITICAL(&_queueMux);
   _cmdQueueHead = 0;
@@ -238,6 +246,9 @@ void WifiControl::generatePairingCode() {
 void WifiControl::revokeController(SafetyFault fault) {
   uint32_t clientId = 0;
   bool wasActive = false;
+  if (!acquireDispatchLock()) {
+    return;
+  }
   portENTER_CRITICAL(&_stateMux);
   if (_session.active) {
     clientId = _session.clientId;
@@ -247,10 +258,13 @@ void WifiControl::revokeController(SafetyFault fault) {
   portEXIT_CRITICAL(&_stateMux);
 
   if (!wasActive) {
+    releaseDispatchLock();
     return;
   }
 
+  clearQueuedCommands();
   requestEmergencyStopFromWifi(clientId, fault);
+  releaseDispatchLock();
   generatePairingCode();
   broadcastTelemetry();
 }
@@ -284,7 +298,11 @@ bool WifiControl::constantTimeEquals(const char* a, const char* b, size_t n) con
   return diff == 0;
 }
 
-bool WifiControl::controllerMatches(uint32_t clientId, const WebParsedMessage& message) const {
+bool WifiControl::controllerMatches(
+  uint32_t clientId,
+  const WebParsedMessage& message,
+  uint32_t* sessionGeneration
+) const {
   if (!message.hasToken) {
     return false;
   }
@@ -293,24 +311,64 @@ bool WifiControl::controllerMatches(uint32_t clientId, const WebParsedMessage& m
   const bool matches = _session.active &&
                        _session.clientId == clientId &&
                        constantTimeEquals(message.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS);
+  if (matches && sessionGeneration) {
+    *sessionGeneration = _session.generation;
+  }
   portEXIT_CRITICAL(&_stateMux);
   return matches;
 }
 
-bool WifiControl::acceptRequestId(uint32_t requestId) {
+bool WifiControl::acceptRequestId(uint32_t requestId, uint32_t sessionGeneration) {
   if (requestId == 0) {
     return false;
   }
 
   portENTER_CRITICAL(&_stateMux);
-  const bool accepted = !_session.hasLastRequestId ||
-    static_cast<int32_t>(requestId - _session.lastRequestId) > 0;
+  const bool accepted = _session.active &&
+    _session.generation == sessionGeneration &&
+    (!_session.hasLastRequestId ||
+     static_cast<int32_t>(requestId - _session.lastRequestId) > 0);
   if (accepted) {
     _session.lastRequestId = requestId;
     _session.hasLastRequestId = true;
   }
   portEXIT_CRITICAL(&_stateMux);
   return accepted;
+}
+
+bool WifiControl::commandSessionCurrent(const QueuedCommand& command) const {
+  portENTER_CRITICAL(&_stateMux);
+  const bool current = _session.active &&
+                       _session.clientId == command.clientId &&
+                       _session.generation == command.sessionGeneration;
+  portEXIT_CRITICAL(&_stateMux);
+  return current;
+}
+
+void WifiControl::refreshControllerLease(
+  uint32_t clientId,
+  uint32_t sessionGeneration,
+  uint32_t nowMs
+) {
+  portENTER_CRITICAL(&_stateMux);
+  if (_session.active &&
+      _session.clientId == clientId &&
+      _session.generation == sessionGeneration) {
+    _session.leaseExpiryMs = nowMs + WIFI_CONTROLLER_LEASE_MS;
+    _session.lastAcceptedCommandMs = nowMs;
+  }
+  portEXIT_CRITICAL(&_stateMux);
+}
+
+bool WifiControl::acquireDispatchLock() {
+  return _dispatchMutex != nullptr &&
+    xSemaphoreTake(_dispatchMutex, portMAX_DELAY) == pdTRUE;
+}
+
+void WifiControl::releaseDispatchLock() {
+  if (_dispatchMutex != nullptr) {
+    xSemaphoreGive(_dispatchMutex);
+  }
 }
 
 void WifiControl::recordPairFailure(uint32_t nowMs) {
@@ -385,11 +443,23 @@ bool WifiControl::dequeueCommand(QueuedCommand& cmd) {
   return success;
 }
 
+void WifiControl::clearQueuedCommands() {
+  portENTER_CRITICAL(&_queueMux);
+  _cmdQueueHead = 0;
+  _cmdQueueTail = 0;
+  _cmdQueueSize = 0;
+  portEXIT_CRITICAL(&_queueMux);
+}
+
 void WifiControl::requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fault) {
   portENTER_CRITICAL(&_queueMux);
-  _pendingStop = true;
-  _pendingStopClientId = clientId;
-  _pendingStopFault = fault;
+  if (!_pendingStop ||
+      _pendingStopFault == SafetyFault::NONE ||
+      fault != SafetyFault::NONE) {
+    _pendingStop = true;
+    _pendingStopClientId = clientId;
+    _pendingStopFault = fault;
+  }
   portEXIT_CRITICAL(&_queueMux);
 }
 
@@ -445,19 +515,17 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::STATUS ||
       msg.type == WebMessageType::PING) {
     if (msg.type == WebMessageType::PING && msg.hasToken) {
-      if (!msg.hasRequestId || !controllerMatches(clientId, msg)) {
+      uint32_t sessionGeneration = 0;
+      if (!msg.hasRequestId || !controllerMatches(clientId, msg, &sessionGeneration)) {
         _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
         return;
       }
-      if (!acceptRequestId(msg.requestId)) {
+      if (!acceptRequestId(msg.requestId, sessionGeneration)) {
         _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
         return;
       }
 
-      portENTER_CRITICAL(&_stateMux);
-      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
-      _session.lastAcceptedCommandMs = now;
-      portEXIT_CRITICAL(&_stateMux);
+      refreshControllerLease(clientId, sessionGeneration, now);
     }
     _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     sendEvents(clientId);
@@ -516,11 +584,16 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     char token[WIFI_SESSION_TOKEN_HEX_CHARS + 1] = {};
     generateToken(token);
     bool paired = false;
+    if (!acquireDispatchLock()) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "internal_error"));
+      return;
+    }
     portENTER_CRITICAL(&_stateMux);
     if (!_session.active || _session.clientId == clientId) {
       _session = {};
       _session.active = true;
       _session.clientId = clientId;
+      _session.generation = ++_nextSessionGeneration;
       strlcpy(_session.token, token, sizeof(_session.token));
       _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
       _session.lastAcceptedCommandMs = now;
@@ -532,6 +605,10 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       paired = true;
     }
     portEXIT_CRITICAL(&_stateMux);
+    if (paired) {
+      clearQueuedCommands();
+    }
+    releaseDispatchLock();
 
     if (!paired) {
       _ws->text(clientId, _protocol.generateError(msg.requestId, "controller_busy"));
@@ -559,6 +636,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
 
   if (msg.type != WebMessageType::STOP) {
     bool controllerOwned = false;
+    uint32_t sessionGeneration = 0;
     portENTER_CRITICAL(&_stateMux);
     controllerOwned = _session.active && _session.clientId == clientId;
     portEXIT_CRITICAL(&_stateMux);
@@ -566,17 +644,34 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
       return;
     }
-    if (!controllerMatches(clientId, msg)) {
+    if (!controllerMatches(clientId, msg, &sessionGeneration)) {
       _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
       return;
     }
-    if (!acceptRequestId(msg.requestId)) {
+    if (!acceptRequestId(msg.requestId, sessionGeneration)) {
       _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
       return;
+    }
+    QueuedCommand qc;
+    qc.command = msg.command;
+    qc.enqueuedMs = now;
+    qc.observedEpoch = _router->currentEpoch();
+    qc.requestId = msg.hasRequestId ? msg.requestId : 0;
+    qc.clientId = clientId;
+    qc.sessionGeneration = sessionGeneration;
+
+    if (enqueueCommand(qc)) {
+      refreshControllerLease(clientId, sessionGeneration, now);
+    } else {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "queue_full"));
     }
   } else {
     bool controllerOwned = false;
     bool tokenMatches = !msg.hasToken;
+    if (!acquireDispatchLock()) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "internal_error"));
+      return;
+    }
     portENTER_CRITICAL(&_stateMux);
     controllerOwned = _session.active && _session.clientId == clientId;
     if (controllerOwned && msg.hasToken) {
@@ -588,34 +683,21 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     }
     portEXIT_CRITICAL(&_stateMux);
     if (!controllerOwned) {
+      releaseDispatchLock();
       _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
       return;
     }
     if (!tokenMatches) {
+      releaseDispatchLock();
       _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
       return;
     }
     requestEmergencyStopFromWifi(clientId, SafetyFault::NONE);
+    releaseDispatchLock();
     if (msg.hasRequestId) {
       _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     }
     return;
-  }
-
-  QueuedCommand qc;
-  qc.command = msg.command;
-  qc.enqueuedMs = now;
-  qc.observedEpoch = _router->currentEpoch();
-  qc.requestId = msg.hasRequestId ? msg.requestId : 0;
-  qc.clientId = clientId;
-  
-  if (enqueueCommand(qc)) {
-    portENTER_CRITICAL(&_stateMux);
-    _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
-    _session.lastAcceptedCommandMs = now;
-    portEXIT_CRITICAL(&_stateMux);
-  } else {
-    _ws->text(clientId, _protocol.generateError(msg.requestId, "queue_full"));
   }
 }
 
@@ -697,13 +779,19 @@ void WifiControl::update() {
 
   QueuedCommand qc;
   while (dequeueCommand(qc)) {
-    bool executeIt = true;
-    if (_router->lastInterventionEpoch() > qc.observedEpoch) {
+    bool sessionCurrent = false;
+    bool superseded = false;
+    const bool dispatchLocked = acquireDispatchLock();
+    if (dispatchLocked) {
+      sessionCurrent = commandSessionCurrent(qc);
+    }
+    if (sessionCurrent && _router->lastInterventionEpoch() > qc.observedEpoch) {
       if (qc.command.kind != CommandKind::STOP && qc.command.kind != CommandKind::DISARM) {
-        executeIt = false;
+        superseded = true;
       }
     }
 
+    bool executeIt = dispatchLocked && sessionCurrent && !superseded;
     bool ok = false;
     String replyMsg = "";
     if (executeIt) {
@@ -715,7 +803,11 @@ void WifiControl::update() {
         if (!ok && qc.command.kind == CommandKind::MOVE) {
           if (_robot) {
             const SafetyFault fault = _robot->safetyFault();
-            if (fault == SafetyFault::OBSTACLE_BLOCKED) {
+            const ObstacleSafetyStatus& obstacle = _robot->obstacleSafetyStatus();
+            if (qc.command.driveMode == DriveMode::FORWARD &&
+                obstacle.forwardMotionBlocked) {
+              replyMsg = obstacle.rangeValid ? "obstacle_blocked" : "sensor_unavailable";
+            } else if (fault == SafetyFault::OBSTACLE_BLOCKED) {
               replyMsg = "obstacle_blocked";
             } else if (fault == SafetyFault::RANGE_SENSOR_INVALID) {
               replyMsg = "sensor_unavailable";
@@ -734,7 +826,16 @@ void WifiControl::update() {
         }
       }
     } else {
-      replyMsg = "superseded";
+      if (!dispatchLocked) {
+        replyMsg = "internal_error";
+      } else if (!sessionCurrent) {
+        replyMsg = "session_expired";
+      } else {
+        replyMsg = "superseded";
+      }
+    }
+    if (dispatchLocked) {
+      releaseDispatchLock();
     }
 
     if (qc.requestId > 0 && qc.clientId > 0) {
