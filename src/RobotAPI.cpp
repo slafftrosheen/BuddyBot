@@ -14,7 +14,7 @@ void RobotAPI::begin(
   _autonomyEnabled = false;
   
   if (_actions) {
-    _actions->begin(hal, persona);
+    _actions->begin(hal, persona, this);
   }
   
   _diagnostics.begin(hal);

@@ -168,7 +168,6 @@ void loop() {
     return;
   }
   
-  hal.update();
   robot.update();
   handleAutonomy();
 

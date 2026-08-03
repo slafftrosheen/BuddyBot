@@ -2,9 +2,10 @@
 #include <Arduino.h>
 #include "Types.h"
 
-#if __has_include("arduino_secrets.h")
-#include "arduino_secrets.h"
+#if !__has_include("arduino_secrets.h")
+#error "Create src/arduino_secrets.h from src/arduino_secrets.example.h before building."
 #endif
+#include "arduino_secrets.h"
 
 // ---------- Firmware ----------
 constexpr char FIRMWARE_NAME[] = "BuddyBot OS";
@@ -57,7 +58,7 @@ constexpr bool ENABLE_AUTONOMY_AT_BOOT = false;
 constexpr bool ENABLE_CAUTIOUS_ROAM = false;
 
 constexpr bool ENABLE_OBSTACLE_SAFETY = true;
-constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = false;
+constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = true;
 
 static_assert(!ALLOW_MOTOR_ARMING || ENABLE_OBSTACLE_SAFETY, "Motor arming should not be enabled without obstacle safety");
 static_assert(!ENABLE_CAUTIOUS_ROAM || ALLOW_MOTOR_ARMING, "Cautious roam requires motor arming");
@@ -229,11 +230,11 @@ constexpr bool WIFI_START_SOFT_AP = true;
 constexpr bool WIFI_ENABLE_STA = false;
 
 #ifndef SECRET_WIFI_AP_SSID
-#define SECRET_WIFI_AP_SSID "BuddyBot-Control"
+#error "SECRET_WIFI_AP_SSID must be provisioned in src/arduino_secrets.h."
 #endif
 
 #ifndef SECRET_WIFI_AP_PASSWORD
-#define SECRET_WIFI_AP_PASSWORD "BuddyBotSecure123"
+#error "SECRET_WIFI_AP_PASSWORD must be provisioned in src/arduino_secrets.h."
 #endif
 
 constexpr char WIFI_AP_SSID[] = SECRET_WIFI_AP_SSID;

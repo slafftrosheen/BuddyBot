@@ -5,6 +5,7 @@
 #include "IJoint.h"
 
 class RobotHal;
+class RobotAPI;
 
 enum class ActionDrivePolicy : uint8_t {
   PRESERVE_DRIVE,
@@ -16,7 +17,7 @@ class PersonaManager;
 
 class RobotActions {
 public:
-  void begin(RobotHal* hal, PersonaManager* personas);
+  void begin(RobotHal* hal, PersonaManager* personas, RobotAPI* robot);
 
   void update();
 
@@ -29,6 +30,7 @@ public:
 private:
   RobotHal* _hal = nullptr;
   PersonaManager* _personas = nullptr;
+  RobotAPI* _robot = nullptr;
 
   ActionDrivePolicy drivePolicy(ActionId action) const;
   uint16_t timeoutFor(ActionId action) const;

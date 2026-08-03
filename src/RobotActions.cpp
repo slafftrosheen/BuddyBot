@@ -1,11 +1,13 @@
 #include "RobotActions.h"
 #include "RobotHal.h"
+#include "RobotAPI.h"
 #include "Persona.h"
 #include "ServoJoint.h"
 
-void RobotActions::begin(RobotHal* hal, PersonaManager* personas) {
+void RobotActions::begin(RobotHal* hal, PersonaManager* personas, RobotAPI* robot) {
   _hal = hal;
   _personas = personas;
+  _robot = robot;
   _action = ActionId::NONE;
   _step = 0;
 }
@@ -253,8 +255,8 @@ void RobotActions::updateCelebrate() {
   if (_step == 1) {
     if (!_hal->drive()) return;
     if (stepElapsed(400)) {
-      if (_hal->drive()->isArmed() && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _hal->drive()->drive(DriveCommand{DriveMode::TURN_LEFT, 0, 0, 220});
+      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+        _robot->move(DriveMode::TURN_LEFT, 220);
       }
       nextStep();
     }
@@ -264,8 +266,8 @@ void RobotActions::updateCelebrate() {
   if (_step == 2) {
     if (!_hal->drive()) return;
     if (stepElapsed(280)) {
-      if (_hal->drive()->isArmed() && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _hal->drive()->drive(DriveCommand{DriveMode::TURN_RIGHT, 0, 0, 440});
+      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+        _robot->move(DriveMode::TURN_RIGHT, 440);
       }
       nextStep();
     }
@@ -288,8 +290,8 @@ void RobotActions::updateDance() {
   if (_step == 0) {
     if (leftArm) leftArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
     if (rightArm) rightArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
-    if (_hal->drive() && _hal->drive()->isArmed() && ALLOW_ACTION_DRIVE_MOVEMENT) {
-      _hal->drive()->drive(DriveCommand{DriveMode::TURN_LEFT, 0, 0, 220});
+    if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+      _robot->move(DriveMode::TURN_LEFT, 220);
     }
     nextStep();
     return;
@@ -299,8 +301,8 @@ void RobotActions::updateDance() {
     if (stepElapsed(gestures.danceStepMs)) {
       if (leftArm) leftArm->moveTo(90, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (rightArm) rightArm->moveTo(90, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
-      if (_hal->drive() && _hal->drive()->isArmed() && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _hal->drive()->drive(DriveCommand{DriveMode::TURN_RIGHT, 0, 0, 440});
+      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+        _robot->move(DriveMode::TURN_RIGHT, 440);
       }
       nextStep();
     }
@@ -311,8 +313,8 @@ void RobotActions::updateDance() {
     if (stepElapsed(gestures.danceStepMs)) {
       if (leftArm) leftArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
       if (rightArm) rightArm->moveTo(150, gestures.danceStepMs, JointEasing::EASE_IN_OUT);
-      if (_hal->drive() && _hal->drive()->isArmed() && ALLOW_ACTION_DRIVE_MOVEMENT) {
-        _hal->drive()->drive(DriveCommand{DriveMode::FORWARD, 0, 0, 250});
+      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+        _robot->move(DriveMode::FORWARD, 250);
       }
       nextStep();
     }
