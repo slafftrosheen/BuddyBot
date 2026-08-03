@@ -44,8 +44,10 @@ This is the standard baseline configuration for the `hardware-safety-beta` relea
 
 ## Validation
 
-The system runs `validateBuildConfig()` before initializing hardware. It rejects duplicate servo channels, obstacle-stop profiles without a range sensor, and accessory 2 or 3 controllers because this firmware only implements Accessory 1. A rejected profile leaves motion hardware unavailable and reports the reason over Serial.
+The system runs `validateBuildConfig()` before initializing hardware. The versioned hardware manifest rejects duplicate channels or roles, incomplete drive layouts, invalid calibration bounds, unsupported roller joints, obstacle-stop profiles without a range sensor, and accessory 2 or 3 controllers because this firmware only implements Accessory 1. A rejected profile leaves motion hardware unavailable and reports the reason over Serial.
 
 ## Usage
 
 You can change the profile by editing `ACTIVE_BUILD_PROFILE` in `src/Config.h`. When running, the `PROFILE LIST` and `PROFILE SHOW` serial commands allow inspecting the current build and available profiles.
+
+The active manifest version is reported by `STATUS` and WebSocket telemetry. A profile must be commissioned on an elevated rig before enabling motor arming.

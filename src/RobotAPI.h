@@ -70,6 +70,7 @@ public:
   const ObstacleSafetyStatus& obstacleSafetyStatus() const;
   bool forwardMotionAllowed() const;
   SafetyStopReason lastSafetyStopReason() const;
+  void recordSafetyStop(SafetyStopReason reason);
   
   RangeSensorHealth rangeSensorHealth() const;
   uint16_t rangeConsecutiveInvalid() const;

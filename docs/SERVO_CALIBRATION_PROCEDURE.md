@@ -4,6 +4,8 @@ BuddyBot supports a 4-wheel continuous-rotation drive system and 4 positional ma
 
 Calibration is only allowed via USB Serial connection for safety. Ensure the robot is elevated (wheels not touching the ground) during this procedure.
 
+Build the `buddybot_bench` environment for commissioning. The production-safe environment rejects raw servo diagnostics.
+
 ## 1. Preparation
 1. Elevate the robot.
 2. Connect to the robot via USB Serial at 115200 baud.
@@ -16,7 +18,7 @@ Send this command over Serial:
 ```
 SERVO TEST UNLOCK
 ```
-The robot should reply with `SERVO TEST UNLOCKED`. The safety routines will now allow direct pulse writing.
+The robot should reply with `SERVO TEST UNLOCKED`. Unlock is rejected if drive output is armed or a Wi-Fi controller is active.
 
 ## 3. Calibrating Continuous Drive Servos (Roles 1-4)
 For each wheel, you must find the pulse width where the motor stops spinning. Most continuous servos stop at 1500us.
@@ -58,11 +60,11 @@ JOINT REST 6
 Check that the arm does not bind or stall at the extents. Update the default resting angles in `src/Config.h` and positional limits in `src/BuildProfiles.cpp` if they hit physical constraints.
 
 ## 5. Stopping the Test
-When finished, lock the diagnostic mode to restore safety router control:
+When finished, stop and lock the diagnostic mode:
 ```
 SERVO TEST STOP
 ```
-The robot will reply `SERVO TEST STOPPED`. All servos will be rested.
+The robot will reply `SERVO TEST STOPPED AND LOCKED`. The tested wheel receives its calibrated stop pulse before diagnostics lock. Normal drive remains disarmed until explicitly armed.
 
 ## Troubleshooting
 - **TEST REJECTED**: Ensure you ran `SERVO TEST UNLOCK` first.

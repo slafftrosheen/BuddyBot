@@ -454,6 +454,10 @@ SafetyStopReason RobotAPI::lastSafetyStopReason() const {
   return _safety.status().lastStopReason;
 }
 
+void RobotAPI::recordSafetyStop(SafetyStopReason reason) {
+  _safety.recordExternalStop(reason, millis());
+}
+
 RangeSensorHealth RobotAPI::rangeSensorHealth() const {
   if (_hal && _hal->range()) return _hal->range()->health();
   return RangeSensorHealth::UNINITIALIZED;

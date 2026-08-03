@@ -294,6 +294,17 @@ SafetyFault SafetySupervisor::faultForArm() const {
   if (!_inputs.driveAvailable) {
     return SafetyFault::DRIVE_UNAVAILABLE;
   }
+  if (_fault == SafetyFault::RANGE_SENSOR_INVALID && !_inputs.rangeValid) {
+    return SafetyFault::RANGE_SENSOR_INVALID;
+  }
+  if (_fault == SafetyFault::OBSTACLE_BLOCKED) {
+    if (!_inputs.rangeValid) {
+      return SafetyFault::RANGE_SENSOR_INVALID;
+    }
+    if (_inputs.forwardMotionBlocked) {
+      return SafetyFault::OBSTACLE_BLOCKED;
+    }
+  }
   return SafetyFault::NONE;
 }
 

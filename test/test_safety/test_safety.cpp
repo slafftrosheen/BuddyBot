@@ -43,6 +43,7 @@ void test_forward_sensor_failure_latches_fault_and_disarm_request() {
   TEST_ASSERT_TRUE(supervisor.requestArm(inputs, 110));
 
   inputs.rangeValid = false;
+  supervisor.update(inputs, 120);
   TEST_ASSERT_FALSE(supervisor.requestDrive(true, false, 120));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(SafetyState::FAULT), static_cast<uint8_t>(supervisor.state()));
   TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(SafetyFault::RANGE_SENSOR_INVALID), static_cast<uint8_t>(supervisor.fault()));
@@ -57,6 +58,8 @@ void test_manual_control_preempts_autonomy_until_lease_expires() {
   TEST_ASSERT_TRUE(supervisor.requestAutonomy(true, 120));
   TEST_ASSERT_TRUE(supervisor.requestDrive(false, false, 130));
   TEST_ASSERT_FALSE(supervisor.requestDrive(false, true, 200));
+  inputs.imuSampleTimeMs = 800;
+  supervisor.update(inputs, 800);
   TEST_ASSERT_TRUE(supervisor.requestDrive(false, true, 800));
 }
 

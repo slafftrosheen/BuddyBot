@@ -91,9 +91,28 @@ void ControlRouter::updateSafety() {
 
   _safety->update(buildSafetyInputs(), millis());
   if (_safety->consumeDisarmRequest()) {
+    const SafetyFault fault = _safety->fault();
     disableAutonomy();
     if (_robot) {
+      if (_robot->diagnostics()) {
+        _robot->diagnostics()->lock();
+      }
       _robot->disarmMotors();
+      if (fault == SafetyFault::OBSTACLE_BLOCKED) {
+        _robot->recordSafetyStop(SafetyStopReason::OBSTACLE_BLOCKED);
+      } else if (fault == SafetyFault::RANGE_SENSOR_INVALID) {
+        _robot->recordSafetyStop(SafetyStopReason::RANGE_SENSOR_INVALID);
+      } else if (fault == SafetyFault::IMU_UNAVAILABLE ||
+          fault == SafetyFault::IMU_INVALID ||
+          fault == SafetyFault::IMU_STALE ||
+          fault == SafetyFault::IMU_TILT ||
+          fault == SafetyFault::IMU_ACCELERATION ||
+          fault == SafetyFault::IMU_GYRO) {
+        _robot->recordSafetyStop(SafetyStopReason::IMU_INVALID);
+      } else if (fault == SafetyFault::DRIVE_UNAVAILABLE ||
+                 fault == SafetyFault::HARDWARE_UNAVAILABLE) {
+        _robot->recordSafetyStop(SafetyStopReason::DRIVE_UNAVAILABLE);
+      }
     }
   }
   recordSafetyTransition();
@@ -108,8 +127,42 @@ void ControlRouter::emergencyStop(SafetyFault fault) {
     _safety->emergencyStop(fault, millis());
   }
   disableAutonomy();
+  if (_robot->diagnostics()) {
+    _robot->diagnostics()->lock();
+  }
   _robot->stopAll();
   _robot->disarmMotors();
+  switch (fault) {
+    case SafetyFault::OBSTACLE_BLOCKED:
+      _robot->recordSafetyStop(SafetyStopReason::OBSTACLE_BLOCKED);
+      break;
+    case SafetyFault::RANGE_SENSOR_INVALID:
+      _robot->recordSafetyStop(SafetyStopReason::RANGE_SENSOR_INVALID);
+      break;
+    case SafetyFault::CONTROLLER_DISCONNECTED:
+      _robot->recordSafetyStop(SafetyStopReason::CONTROLLER_DISCONNECT);
+      break;
+    case SafetyFault::CONTROLLER_LEASE_EXPIRED:
+      _robot->recordSafetyStop(SafetyStopReason::CONTROLLER_LEASE_EXPIRED);
+      break;
+    case SafetyFault::DRIVE_WATCHDOG:
+      _robot->recordSafetyStop(SafetyStopReason::DRIVE_WATCHDOG);
+      break;
+    case SafetyFault::IMU_UNAVAILABLE:
+    case SafetyFault::IMU_INVALID:
+    case SafetyFault::IMU_STALE:
+    case SafetyFault::IMU_TILT:
+    case SafetyFault::IMU_ACCELERATION:
+    case SafetyFault::IMU_GYRO:
+      _robot->recordSafetyStop(SafetyStopReason::IMU_INVALID);
+      break;
+    case SafetyFault::DRIVE_UNAVAILABLE:
+    case SafetyFault::HARDWARE_UNAVAILABLE:
+      _robot->recordSafetyStop(SafetyStopReason::DRIVE_UNAVAILABLE);
+      break;
+    default:
+      break;
+  }
   recordSafetyTransition();
 }
 
@@ -122,8 +175,12 @@ void ControlRouter::physicalEmergencyStop() {
     _safety->physicalEstop(millis());
   }
   disableAutonomy();
+  if (_robot->diagnostics()) {
+    _robot->diagnostics()->lock();
+  }
   _robot->stopAll();
   _robot->disarmMotors();
+  _robot->recordSafetyStop(SafetyStopReason::PHYSICAL_ESTOP);
   recordSafetyTransition();
 }
 
@@ -150,6 +207,7 @@ SafetyFault ControlRouter::safetyFault() const {
 
 bool ControlRouter::execute(const RobotCommand& cmd) {
   if (_robot == nullptr) return false;
+  updateSafety();
 
   bool isTelemetryQuery = (
     cmd.kind == CommandKind::RANGE_QUERY ||
@@ -341,6 +399,10 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
         case SafetyStopReason::CONTROLLER_DISCONNECT: rStr = "CONTROLLER_DISCONNECT"; break;
         case SafetyStopReason::CONTROLLER_LEASE_EXPIRED: rStr = "CONTROLLER_LEASE_EXPIRED"; break;
         case SafetyStopReason::DRIVE_WATCHDOG: rStr = "DRIVE_WATCHDOG"; break;
+        case SafetyStopReason::PHYSICAL_ESTOP: rStr = "PHYSICAL_ESTOP"; break;
+        case SafetyStopReason::IMU_UNAVAILABLE: rStr = "IMU_UNAVAILABLE"; break;
+        case SafetyStopReason::IMU_INVALID: rStr = "IMU_INVALID"; break;
+        case SafetyStopReason::DRIVE_UNAVAILABLE: rStr = "DRIVE_UNAVAILABLE"; break;
         case SafetyStopReason::DISARMED: rStr = "DISARMED"; break;
       }
       
@@ -406,10 +468,19 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
 
     case CommandKind::SERVO_TEST:
       if (cmd.source != ControlSource::SERIAL_CTRL) return false;
+      if (safetyState() == SafetyState::BOOT ||
+          safetyState() == SafetyState::FAULT ||
+          safetyState() == SafetyState::ESTOP) {
+        Serial.println("TEST REJECTED (SAFETY STATE)");
+        return false;
+      }
       if (cmd.arg1 == -1) {
         if (_wifi && _wifi->controllerPresent()) {
           Serial.println("TEST REJECTED (CONTROLLER ACTIVE)");
           return false;
+        }
+        if (_safety) {
+          _safety->requestDisarm(millis());
         }
         _robot->disarmMotors();
         if (_robot->diagnostics()->unlock()) {

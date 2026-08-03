@@ -22,6 +22,14 @@ bool WifiControl::start() {
   _globalFailedPairAttempts = 0;
   _pairingLockedUntilMs = 0;
   portEXIT_CRITICAL(&_stateMux);
+  portENTER_CRITICAL(&_queueMux);
+  _cmdQueueHead = 0;
+  _cmdQueueTail = 0;
+  _cmdQueueSize = 0;
+  _pendingStop = false;
+  _pendingStopClientId = 0;
+  _pendingStopFault = SafetyFault::DRIVE_WATCHDOG;
+  portEXIT_CRITICAL(&_queueMux);
 
   if (WIFI_START_SOFT_AP) {
     if (!startSoftAP()) {
@@ -119,7 +127,14 @@ bool WifiControl::start() {
 
 void WifiControl::stop() {
   if (!_running) return;
+  const bool hadController = controllerPresent();
   revokeController();
+  if (hadController && _router) {
+    _router->emergencyStop(SafetyFault::CONTROLLER_DISCONNECTED);
+    portENTER_CRITICAL(&_queueMux);
+    _pendingStop = false;
+    portEXIT_CRITICAL(&_queueMux);
+  }
   
   if (_ws) {
     _ws->closeAll();
@@ -826,6 +841,10 @@ void WifiControl::broadcastTelemetry() {
     case SafetyStopReason::CONTROLLER_DISCONNECT: t.lastSafetyStopReason = "controller_disconnect"; break;
     case SafetyStopReason::CONTROLLER_LEASE_EXPIRED: t.lastSafetyStopReason = "controller_lease_expired"; break;
     case SafetyStopReason::DRIVE_WATCHDOG: t.lastSafetyStopReason = "drive_watchdog"; break;
+    case SafetyStopReason::PHYSICAL_ESTOP: t.lastSafetyStopReason = "physical_estop"; break;
+    case SafetyStopReason::IMU_UNAVAILABLE: t.lastSafetyStopReason = "imu_unavailable"; break;
+    case SafetyStopReason::IMU_INVALID: t.lastSafetyStopReason = "imu_invalid"; break;
+    case SafetyStopReason::DRIVE_UNAVAILABLE: t.lastSafetyStopReason = "drive_unavailable"; break;
     case SafetyStopReason::DISARMED: t.lastSafetyStopReason = "disarmed"; break;
     default: t.lastSafetyStopReason = "unknown"; break;
   }
