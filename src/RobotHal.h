@@ -30,7 +30,7 @@ public:
   ManipulatorState manipulatorState(ManipulatorId id) const;
 
   // For diagnostics only
-  void writeRawPulse(ServoRole role, uint16_t pulseUs);
+  bool writeRawPulse(ServoRole role, uint16_t pulseUs);
 
 private:
   RobotBuildConfig _config;

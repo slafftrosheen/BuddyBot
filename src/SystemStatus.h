@@ -4,6 +4,8 @@
 #include "BootDiagnostics.h"
 #include "EventLog.h"
 
+class SystemHealth;
+
 struct FirmwareIdentity {
   const char* name;
   const char* version;
@@ -17,7 +19,12 @@ FirmwareIdentity getFirmwareIdentity();
 
 class SystemStatus {
 public:
-  void begin(RobotAPI* robot, RobotHal* hal, BootDiagnostics* diag = nullptr);
+  void begin(
+    RobotAPI* robot,
+    RobotHal* hal,
+    BootDiagnostics* diag = nullptr,
+    SystemHealth* health = nullptr
+  );
   void printStatus() const;
   void printEvents() const;
 
@@ -38,6 +45,7 @@ private:
   RobotAPI* _robot = nullptr;
   RobotHal* _hal = nullptr;
   BootDiagnostics* _diag = nullptr;
+  SystemHealth* _health = nullptr;
 
   char _pairingCode[16] = {0};
   bool _wifiRunning = false;

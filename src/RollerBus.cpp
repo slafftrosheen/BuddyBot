@@ -1,4 +1,5 @@
 #include "RollerBus.h"
+#include "Config.h"
 
 // M5 Roller485 I2C Registers
 static constexpr uint8_t REG_MOTOR_ENABLE = 0x00;
@@ -14,7 +15,11 @@ bool RollerBus::writeRegister(uint8_t reg, uint8_t value) {
   _wire.beginTransmission(_addr);
   _wire.write(reg);
   _wire.write(value);
-  return (_wire.endTransmission() == 0);
+  const bool success = _wire.endTransmission() == 0;
+  if (!success) {
+    _connected = false;
+  }
+  return success;
 }
 
 bool RollerBus::writeRegister32(uint8_t reg, int32_t value) {
@@ -24,7 +29,11 @@ bool RollerBus::writeRegister32(uint8_t reg, int32_t value) {
   _wire.write((value >> 8) & 0xFF);
   _wire.write((value >> 16) & 0xFF);
   _wire.write((value >> 24) & 0xFF);
-  return (_wire.endTransmission() == 0);
+  const bool success = _wire.endTransmission() == 0;
+  if (!success) {
+    _connected = false;
+  }
+  return success;
 }
 
 bool RollerBus::begin() {
@@ -77,12 +86,15 @@ bool RollerBus::disarm() {
 }
 
 bool RollerBus::setSpeedRpm(int16_t rpm) {
+  rpm = constrain(rpm, -ROLLER_MAX_RPM, ROLLER_MAX_RPM);
+
   // Value = Actual Speed * 100
   int32_t val = (int32_t)rpm * 100;
   if (writeRegister32(REG_SPEED_CONTROL, val)) {
     _lastSpeedRpm = rpm;
     return true;
   }
+  _lastSpeedRpm = 0;
   return false;
 }
 

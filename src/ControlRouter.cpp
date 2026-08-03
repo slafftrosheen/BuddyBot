@@ -1,10 +1,151 @@
 #include "ControlRouter.h"
 #include "BuildProfiles.h"
 #include "WifiControl.h"
+#include "AutonomyManager.h"
+#include "EventLog.h"
 
-void ControlRouter::begin(RobotAPI* robot, SystemStatus* status) {
+void ControlRouter::begin(RobotAPI* robot, SystemStatus* status, SafetySupervisor* safety) {
   _robot = robot;
   _status = status;
+  _safety = safety;
+}
+
+SafetyInputs ControlRouter::buildSafetyInputs() const {
+  SafetyInputs inputs;
+  inputs.bootComplete = _bootComplete;
+  inputs.hardwareReady = _robot && _robot->driveAvailable();
+  inputs.driveAvailable = _robot && _robot->driveAvailable();
+
+  if (!_robot) {
+    return inputs;
+  }
+
+  const ObstacleSafetyStatus& obstacle = _robot->obstacleSafetyStatus();
+  inputs.rangeValid = obstacle.rangeValid;
+  inputs.forwardMotionBlocked = obstacle.forwardMotionBlocked;
+
+  const ImuReading& imu = _robot->imuReading();
+  inputs.imuAvailable = imu.available;
+  inputs.imuValid = imu.valid;
+  inputs.imuSampleTimeMs = imu.sampleTimeMs;
+  inputs.accelXG = imu.accelXG;
+  inputs.accelYG = imu.accelYG;
+  inputs.accelZG = imu.accelZG;
+  inputs.gyroXDps = imu.gyroXDps;
+  inputs.gyroYDps = imu.gyroYDps;
+  inputs.gyroZDps = imu.gyroZDps;
+
+  if (IDriveBase* drive = _robot->driveAvailable() ? _drive : nullptr) {
+    inputs.driveActive = drive->driveMode() != DriveMode::STOPPED;
+    inputs.driveForward = drive->driveMode() == DriveMode::FORWARD;
+  }
+
+  return inputs;
+}
+
+void ControlRouter::disableAutonomy() {
+  if (_autonomy) {
+    _autonomy->setEnabled(false);
+  }
+  if (_robot) {
+    _robot->setAutonomyEnabled(false);
+  }
+}
+
+void ControlRouter::recordSafetyTransition() {
+  if (!_safety) {
+    return;
+  }
+
+  if (_lastReportedSafetyState == _safety->state() &&
+      _lastReportedSafetyFault == _safety->fault()) {
+    return;
+  }
+
+  const char* severity = _safety->state() == SafetyState::FAULT ||
+                         _safety->state() == SafetyState::ESTOP
+    ? "ERROR"
+    : "INFO";
+  EventLog::instance().log(severity, SafetySupervisor::faultName(_safety->fault()), "safety");
+  _lastReportedSafetyState = _safety->state();
+  _lastReportedSafetyFault = _safety->fault();
+}
+
+void ControlRouter::completeBoot() {
+  if (!_safety || _bootComplete) {
+    return;
+  }
+
+  _bootComplete = true;
+  _safety->completeBoot(buildSafetyInputs(), millis());
+  if (_safety->consumeDisarmRequest() && _robot) {
+    _robot->disarmMotors();
+  }
+  recordSafetyTransition();
+}
+
+void ControlRouter::updateSafety() {
+  if (!_safety || !_bootComplete) {
+    return;
+  }
+
+  _safety->update(buildSafetyInputs(), millis());
+  if (_safety->consumeDisarmRequest()) {
+    disableAutonomy();
+    if (_robot) {
+      _robot->disarmMotors();
+    }
+  }
+  recordSafetyTransition();
+}
+
+void ControlRouter::emergencyStop(SafetyFault fault) {
+  if (!_robot) {
+    return;
+  }
+
+  if (_safety) {
+    _safety->emergencyStop(fault, millis());
+  }
+  disableAutonomy();
+  _robot->stopAll();
+  _robot->disarmMotors();
+  recordSafetyTransition();
+}
+
+void ControlRouter::physicalEmergencyStop() {
+  if (!_robot) {
+    return;
+  }
+
+  if (_safety) {
+    _safety->physicalEstop(millis());
+  }
+  disableAutonomy();
+  _robot->stopAll();
+  _robot->disarmMotors();
+  recordSafetyTransition();
+}
+
+bool ControlRouter::clearPhysicalEmergencyStop() {
+  if (!_safety) {
+    return false;
+  }
+
+  const bool cleared = _safety->clearPhysicalEstop(buildSafetyInputs(), millis());
+  if (cleared && _robot) {
+    _robot->disarmMotors();
+  }
+  recordSafetyTransition();
+  return cleared;
+}
+
+SafetyState ControlRouter::safetyState() const {
+  return _safety ? _safety->state() : SafetyState::BOOT;
+}
+
+SafetyFault ControlRouter::safetyFault() const {
+  return _safety ? _safety->fault() : SafetyFault::BOOT_INCOMPLETE;
 }
 
 bool ControlRouter::execute(const RobotCommand& cmd) {
@@ -35,12 +176,29 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
   }
 
   switch (cmd.kind) {
-    case CommandKind::ARM:
-      _robot->armMotors();
-      return true;
+    case CommandKind::ARM: {
+      if (!ALLOW_MOTOR_ARMING) {
+        return false;
+      }
+      if (!_safety || !_safety->requestArm(buildSafetyInputs(), millis())) {
+        recordSafetyTransition();
+        return false;
+      }
+      const bool armed = _robot->armMotors();
+      if (!armed) {
+        _safety->notifyArmFailed(millis());
+      }
+      recordSafetyTransition();
+      return armed;
+    }
 
     case CommandKind::DISARM:
+      if (_safety) {
+        _safety->requestDisarm(millis());
+      }
+      disableAutonomy();
       _robot->disarmMotors();
+      recordSafetyTransition();
       return true;
 
     case CommandKind::STOP:
@@ -56,7 +214,7 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       return true;
 
     case CommandKind::MOVE:
-      return _robot->move(cmd.driveMode, cmd.durationMs);
+      return _robot->move(cmd.driveMode, cmd.durationMs, true, cmd.source);
 
     case CommandKind::ACTION:
       _robot->action(cmd.action);
@@ -190,6 +348,8 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       Serial.printf("forward_blocked=%s\n", st.forwardMotionBlocked ? "true" : "false");
       Serial.printf("last_stop_reason=%s\n", rStr);
       Serial.printf("last_stop_time=%u\n", st.lastStopMs);
+      Serial.printf("supervisor_state=%s\n", SafetySupervisor::stateName(safetyState()));
+      Serial.printf("supervisor_fault=%s\n", SafetySupervisor::faultName(safetyFault()));
       return true;
     }
 
@@ -198,12 +358,19 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       // AutonomyManager state is separate, we'd need to expose it through RobotAPI or just print this
       Serial.printf("autonomy_enabled=%s\n", _robot->autonomyEnabled() ? "true" : "false");
       const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
-      bool ready = _robot->isArmed() && st.state != ObstacleSafetyState::SENSOR_UNAVAILABLE;
+      bool ready = _robot->autonomyMotionAllowed();
       Serial.printf("prerequisites_met=%s\n", ready ? "true" : "false");
       return true;
     }
 
     case CommandKind::AUTONOMY_SET:
+      if (!_safety || !_safety->requestAutonomy(cmd.flag, millis())) {
+        recordSafetyTransition();
+        return false;
+      }
+      if (_autonomy) {
+        _autonomy->setEnabled(cmd.flag);
+      }
       _robot->setAutonomyEnabled(cmd.flag);
       Serial.printf("autonomy=%s\n", cmd.flag ? "ON" : "OFF");
       return true;
@@ -240,16 +407,25 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
     case CommandKind::SERVO_TEST:
       if (cmd.source != ControlSource::SERIAL_CTRL) return false;
       if (cmd.arg1 == -1) {
-        _robot->diagnostics()->unlock();
-        Serial.println("SERVO TEST UNLOCKED");
+        if (_wifi && _wifi->controllerPresent()) {
+          Serial.println("TEST REJECTED (CONTROLLER ACTIVE)");
+          return false;
+        }
+        _robot->disarmMotors();
+        if (_robot->diagnostics()->unlock()) {
+          Serial.println("SERVO TEST UNLOCKED");
+          return true;
+        }
+        Serial.printf("TEST REJECTED (%s)\n", _robot->diagnostics()->lastResultName());
+        return false;
       } else if (cmd.arg1 == -2) {
-        _robot->diagnostics()->stopTest();
-        Serial.println("SERVO TEST STOPPED");
+        _robot->diagnostics()->lock();
+        Serial.println("SERVO TEST STOPPED AND LOCKED");
       } else {
         if (_robot->diagnostics()->testWheel((ServoRole)cmd.arg1, cmd.arg2)) {
-          Serial.printf("TEST WHEEL %d SPEED %d\n", cmd.arg1, cmd.arg2);
+          Serial.printf("TEST WHEEL %d PULSE %d\n", cmd.arg1, cmd.arg2);
         } else {
-          Serial.println("TEST REJECTED (LOCKED OR INVALID)");
+          Serial.printf("TEST REJECTED (%s)\n", _robot->diagnostics()->lastResultName());
         }
       }
       return true;

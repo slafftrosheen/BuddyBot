@@ -13,6 +13,16 @@ bool WifiControl::start() {
   if (!ENABLE_WIFI_CONTROL) return false;
   if (_running) return true;
 
+  portENTER_CRITICAL(&_stateMux);
+  _session = {};
+  for (size_t i = 0; i < WIFI_MAX_CLIENTS; ++i) {
+    _clients[i] = {};
+  }
+  _globalPairWindowStartedMs = millis();
+  _globalFailedPairAttempts = 0;
+  _pairingLockedUntilMs = 0;
+  portEXIT_CRITICAL(&_stateMux);
+
   if (WIFI_START_SOFT_AP) {
     if (!startSoftAP()) {
       logEvent("ERROR", "wifi_ap_start_failed");
@@ -51,6 +61,10 @@ bool WifiControl::start() {
   _ws->onEvent([this](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
       WifiClientState* state = nullptr;
+      bool sessionActive = false;
+      bool pairingReady = false;
+      const uint32_t now = millis();
+      portENTER_CRITICAL(&_stateMux);
       for (size_t i = 0; i < WIFI_MAX_CLIENTS; i++) {
         if (!_clients[i].connected) {
           state = &_clients[i];
@@ -60,25 +74,38 @@ bool WifiControl::start() {
       if (state) {
         state->clientId = client->id();
         state->connected = true;
-        state->commandWindowStartedMs = millis();
+        state->connectedSinceMs = now;
+        state->lastActivityMs = now;
+        state->commandWindowStartedMs = now;
         state->commandsInWindow = 0;
-        state->pairWindowStartedMs = millis();
+        state->pairWindowStartedMs = now;
         state->failedPairAttempts = 0;
-        _status->setWifiStatus(true, _apSsid, _apIp, _ws->count(), _session.active, pairingAvailable());
+        sessionActive = _session.active;
+        pairingReady = _pairingCode[0] != '\0';
+      }
+      portEXIT_CRITICAL(&_stateMux);
+
+      if (state) {
+        _status->setWifiStatus(true, _apSsid, _apIp, _ws->count(), sessionActive, pairingReady);
       } else {
         client->close();
       }
     } else if (type == WS_EVT_DISCONNECT) {
-      if (client->id() == _session.clientId) {
-        logEvent("WARN", "controller_disconnected");
-        revokeController();
-      }
+      bool wasController = false;
+      portENTER_CRITICAL(&_stateMux);
+      wasController = _session.active && client->id() == _session.clientId;
       for (size_t i = 0; i < WIFI_MAX_CLIENTS; i++) {
         if (_clients[i].connected && _clients[i].clientId == client->id()) {
-          _clients[i].connected = false;
+          _clients[i] = {};
         }
       }
-      _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, _session.active, pairingAvailable());
+      portEXIT_CRITICAL(&_stateMux);
+
+      if (wasController) {
+        logEvent("WARN", "controller_disconnected");
+        revokeController(SafetyFault::CONTROLLER_DISCONNECTED);
+      }
+      syncStatus();
     } else if (type == WS_EVT_DATA) {
       handleWebSocketMessage(arg, data, len, client->id());
     }
@@ -106,7 +133,9 @@ void WifiControl::stop() {
   }
   WiFi.softAPdisconnect(true);
   
+  portENTER_CRITICAL(&_stateMux);
   _pairingCode[0] = '\0';
+  portEXIT_CRITICAL(&_stateMux);
   _status->clearPairingCode();
   _status->setWifiStatus(false, "", "", 0, false, false);
   
@@ -115,8 +144,19 @@ void WifiControl::stop() {
 }
 
 bool WifiControl::running() const { return _running; }
-bool WifiControl::controllerPresent() const { return _session.active; }
-bool WifiControl::pairingAvailable() const { return _pairingCode[0] != '\0'; }
+bool WifiControl::controllerPresent() const {
+  portENTER_CRITICAL(&_stateMux);
+  const bool active = _session.active;
+  portEXIT_CRITICAL(&_stateMux);
+  return active;
+}
+
+bool WifiControl::pairingAvailable() const {
+  portENTER_CRITICAL(&_stateMux);
+  const bool available = _pairingCode[0] != '\0';
+  portEXIT_CRITICAL(&_stateMux);
+  return available;
+}
 
 bool WifiControl::requestNewPairingCode() {
   if (!_running || controllerPresent()) return false;
@@ -138,12 +178,18 @@ bool WifiControl::startSoftAP() {
 
 void WifiControl::syncStatus() {
   if (_status) {
-    _status->setWifiStatus(_running, _apSsid, _apIp, clientCount(), _session.active, pairingAvailable());
+    bool sessionActive = false;
+    bool pairingReady = false;
+    portENTER_CRITICAL(&_stateMux);
+    sessionActive = _session.active;
+    pairingReady = _pairingCode[0] != '\0';
+    portEXIT_CRITICAL(&_stateMux);
+    _status->setWifiStatus(_running, _apSsid, _apIp, clientCount(), sessionActive, pairingReady);
   }
 }
 
 void WifiControl::logEvent(const char* severity, const char* code) {
-  EventLog::instance().log(severity, code);
+  EventLog::instance().log(severity, code, "wifi");
   broadcastEvents();
 }
 
@@ -156,28 +202,42 @@ void WifiControl::generateToken(char* outBuffer) {
 void WifiControl::generatePairingCode() {
   uint32_t r1 = esp_random() % 10000;
   uint32_t r2 = esp_random() % 10000;
-  snprintf(_pairingCode, sizeof(_pairingCode), "%04u%04u", r1, r2);
+  char pairingCode[WIFI_PAIRING_DIGITS + 1] = {};
+  snprintf(pairingCode, sizeof(pairingCode), "%04u%04u", r1, r2);
   
   char displayBuf[16];
   snprintf(displayBuf, sizeof(displayBuf), "%04u %04u", r1, r2);
-  _status->setPairingCode(displayBuf);
+
+  bool sessionActive = false;
+  portENTER_CRITICAL(&_stateMux);
+  strlcpy(_pairingCode, pairingCode, sizeof(_pairingCode));
   _pairingStartTime = millis();
-  _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, _session.active, true);
+  sessionActive = _session.active;
+  portEXIT_CRITICAL(&_stateMux);
+
+  _status->setPairingCode(displayBuf);
+  _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, sessionActive, true);
   broadcastTelemetry();
 }
 
-void WifiControl::revokeController() {
+void WifiControl::revokeController(SafetyFault fault) {
+  uint32_t clientId = 0;
+  bool wasActive = false;
+  portENTER_CRITICAL(&_stateMux);
   if (_session.active) {
-    requestEmergencyStopFromWifi(_session.clientId);
-    _session.active = false;
-    _session.token[0] = '\0';
-    _session.clientId = 0;
-    
-    _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, false, pairingAvailable());
-    
-    generatePairingCode();
-    broadcastTelemetry();
+    clientId = _session.clientId;
+    _session = {};
+    wasActive = true;
   }
+  portEXIT_CRITICAL(&_stateMux);
+
+  if (!wasActive) {
+    return;
+  }
+
+  requestEmergencyStopFromWifi(clientId, fault);
+  generatePairingCode();
+  broadcastTelemetry();
 }
 
 void WifiControl::sendEvents(uint32_t clientId) {
@@ -189,18 +249,99 @@ void WifiControl::sendEvents(uint32_t clientId) {
 }
 
 WifiClientState* WifiControl::getClientState(uint32_t clientId) {
+  portENTER_CRITICAL(&_stateMux);
+  WifiClientState* result = nullptr;
   for (size_t i = 0; i < WIFI_MAX_CLIENTS; i++) {
-    if (_clients[i].connected && _clients[i].clientId == clientId) return &_clients[i];
+    if (_clients[i].connected && _clients[i].clientId == clientId) {
+      result = &_clients[i];
+      break;
+    }
   }
-  return nullptr;
+  portEXIT_CRITICAL(&_stateMux);
+  return result;
 }
 
-bool WifiControl::constantTimeEquals(const char* a, const char* b, size_t n) {
+bool WifiControl::constantTimeEquals(const char* a, const char* b, size_t n) const {
   uint8_t diff = 0;
   for (size_t i = 0; i < n; i++) {
     diff |= (a[i] ^ b[i]);
   }
   return diff == 0;
+}
+
+bool WifiControl::controllerMatches(uint32_t clientId, const WebParsedMessage& message) const {
+  if (!message.hasToken) {
+    return false;
+  }
+
+  portENTER_CRITICAL(&_stateMux);
+  const bool matches = _session.active &&
+                       _session.clientId == clientId &&
+                       constantTimeEquals(message.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS);
+  portEXIT_CRITICAL(&_stateMux);
+  return matches;
+}
+
+bool WifiControl::acceptRequestId(uint32_t requestId) {
+  if (requestId == 0) {
+    return false;
+  }
+
+  portENTER_CRITICAL(&_stateMux);
+  const bool accepted = !_session.hasLastRequestId ||
+    static_cast<int32_t>(requestId - _session.lastRequestId) > 0;
+  if (accepted) {
+    _session.lastRequestId = requestId;
+    _session.hasLastRequestId = true;
+  }
+  portEXIT_CRITICAL(&_stateMux);
+  return accepted;
+}
+
+void WifiControl::recordPairFailure(uint32_t nowMs) {
+  portENTER_CRITICAL(&_stateMux);
+  if (nowMs - _globalPairWindowStartedMs >= WIFI_PAIRING_LOCKOUT_MS) {
+    _globalPairWindowStartedMs = nowMs;
+    _globalFailedPairAttempts = 0;
+  }
+  ++_globalFailedPairAttempts;
+  if (_globalFailedPairAttempts > WIFI_MAX_PAIR_ATTEMPTS_PER_MINUTE) {
+    _pairingLockedUntilMs = nowMs + WIFI_PAIRING_LOCKOUT_MS;
+    _globalPairWindowStartedMs = nowMs;
+    _globalFailedPairAttempts = 0;
+  }
+  portEXIT_CRITICAL(&_stateMux);
+}
+
+bool WifiControl::pairingRateLimited(uint32_t nowMs) const {
+  portENTER_CRITICAL(&_stateMux);
+  const bool limited = _pairingLockedUntilMs != 0 &&
+    static_cast<int32_t>(nowMs - _pairingLockedUntilMs) < 0;
+  portEXIT_CRITICAL(&_stateMux);
+  return limited;
+}
+
+void WifiControl::evictIdleUnpairedClients(uint32_t nowMs) {
+  uint32_t clientsToClose[WIFI_MAX_CLIENTS] = {};
+  size_t closeCount = 0;
+
+  portENTER_CRITICAL(&_stateMux);
+  for (size_t i = 0; i < WIFI_MAX_CLIENTS; ++i) {
+    const WifiClientState& client = _clients[i];
+    if (client.connected &&
+        (!_session.active || _session.clientId != client.clientId) &&
+        nowMs - client.lastActivityMs >= WIFI_UNPAIRED_CLIENT_TIMEOUT_MS) {
+      clientsToClose[closeCount++] = client.clientId;
+      _clients[i] = {};
+    }
+  }
+  portEXIT_CRITICAL(&_stateMux);
+
+  for (size_t i = 0; i < closeCount; ++i) {
+    if (_ws) {
+      _ws->close(clientsToClose[i], 1008, "pairing_timeout");
+    }
+  }
 }
 
 bool WifiControl::enqueueCommand(const QueuedCommand& cmd) {
@@ -229,10 +370,11 @@ bool WifiControl::dequeueCommand(QueuedCommand& cmd) {
   return success;
 }
 
-void WifiControl::requestEmergencyStopFromWifi(uint32_t clientId) {
+void WifiControl::requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fault) {
   portENTER_CRITICAL(&_queueMux);
   _pendingStop = true;
   _pendingStopClientId = clientId;
+  _pendingStopFault = fault;
   portEXIT_CRITICAL(&_queueMux);
 }
 
@@ -260,109 +402,188 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   }
 
   uint32_t now = millis();
-  
-  if (msg.type != WebMessageType::STOP) {
-    if (now - state->commandWindowStartedMs > 1000) {
-      state->commandWindowStartedMs = now;
-      state->commandsInWindow = 0;
-    }
-    state->commandsInWindow++;
-    if (state->commandsInWindow > WIFI_MAX_COMMANDS_PER_SECOND) {
-      _ws->text(clientId, _protocol.generateError(msg.requestId, "rate_limited"));
-      return;
+  bool knownClient = false;
+  bool commandRateLimited = false;
+  portENTER_CRITICAL(&_stateMux);
+  if (state->connected && state->clientId == clientId) {
+    knownClient = true;
+    state->lastActivityMs = now;
+    if (msg.type != WebMessageType::STOP) {
+      if (now - state->commandWindowStartedMs >= 1000) {
+        state->commandWindowStartedMs = now;
+        state->commandsInWindow = 0;
+      }
+      ++state->commandsInWindow;
+      commandRateLimited = state->commandsInWindow > WIFI_MAX_COMMANDS_PER_SECOND;
     }
   }
+  portEXIT_CRITICAL(&_stateMux);
 
-  if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::PING || msg.type == WebMessageType::STATUS) {
+  if (!knownClient) {
+    return;
+  }
+  if (commandRateLimited) {
+    _ws->text(clientId, _protocol.generateError(msg.requestId, "rate_limited"));
+    return;
+  }
+
+  if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::STATUS ||
+      msg.type == WebMessageType::PING) {
+    if (msg.type == WebMessageType::PING && msg.hasToken) {
+      if (!msg.hasRequestId || !controllerMatches(clientId, msg)) {
+        _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
+        return;
+      }
+      if (!acceptRequestId(msg.requestId)) {
+        _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
+        return;
+      }
+
+      portENTER_CRITICAL(&_stateMux);
+      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
+      _session.lastAcceptedCommandMs = now;
+      portEXIT_CRITICAL(&_stateMux);
+    }
     _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     sendEvents(clientId);
     return;
   }
 
   if (msg.type == WebMessageType::PAIR) {
-    if (now - state->pairWindowStartedMs > 60000) {
-       state->pairWindowStartedMs = now;
-       state->failedPairAttempts = 0;
-    }
-    state->failedPairAttempts++;
-    if (state->failedPairAttempts > WIFI_MAX_PAIR_ATTEMPTS_PER_MINUTE) {
-       _ws->text(clientId, _protocol.generateError(msg.requestId, "rate_limited"));
-       logEvent("WARN", "pair_rate_limit");
-       return;
-    }
-
-    if (_session.active && _session.clientId != clientId) {
-      _ws->text(clientId, _protocol.generateError(msg.requestId, "controller_busy"));
+    if (pairingRateLimited(now)) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "rate_limited"));
       return;
     }
 
-    if (!pairingAvailable()) {
+    bool clientRateLimited = false;
+    portENTER_CRITICAL(&_stateMux);
+    if (now - state->pairWindowStartedMs >= WIFI_PAIRING_LOCKOUT_MS) {
+      state->pairWindowStartedMs = now;
+      state->failedPairAttempts = 0;
+    }
+    ++state->failedPairAttempts;
+    clientRateLimited = state->failedPairAttempts > WIFI_MAX_PAIR_ATTEMPTS_PER_MINUTE;
+    portEXIT_CRITICAL(&_stateMux);
+    if (clientRateLimited) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "rate_limited"));
+      logEvent("WARN", "pair_rate_limit");
+      return;
+    }
+
+    char pairingCode[WIFI_PAIRING_DIGITS + 1] = {};
+    bool controllerBusy = false;
+    bool pairingReady = false;
+    portENTER_CRITICAL(&_stateMux);
+    controllerBusy = _session.active && _session.clientId != clientId;
+    pairingReady = _pairingCode[0] != '\0';
+    strlcpy(pairingCode, _pairingCode, sizeof(pairingCode));
+    portEXIT_CRITICAL(&_stateMux);
+
+    if (controllerBusy) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "controller_busy"));
+      return;
+    }
+    if (!pairingReady) {
       _ws->text(clientId, _protocol.generateError(msg.requestId, "pairing_unavailable"));
       return;
     }
 
-    if (constantTimeEquals(msg.pairingDigits, _pairingCode, WIFI_PAIRING_DIGITS)) {
-      state->failedPairAttempts = 0;
-      _session.active = true;
-      _session.clientId = clientId;
-      generateToken(_session.token);
-      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
-      _session.lastAcceptedCommandMs = now;
-      _session.lastActiveDriveMs = 0;
-      _session.driveWatchdogStopped = false;
-      
-      _pairingCode[0] = '\0';
-      _status->clearPairingCode();
-      _status->setWifiStatus(true, _apSsid, _apIp, _ws->count(), true, false);
-      
-      logEvent("INFO", "paired");
-      
-      JsonDocument ackDoc;
-      ackDoc["type"] = "paired";
-      if (msg.hasRequestId) ackDoc["id"] = msg.requestId;
-      ackDoc["ok"] = true;
-      ackDoc["token"] = _session.token;
-      ackDoc["leaseMs"] = WIFI_CONTROLLER_LEASE_MS;
-      String ackStr;
-      serializeJson(ackDoc, ackStr);
-      _ws->text(clientId, ackStr);
-      
-      broadcastTelemetry();
-      sendEvents(clientId);
-      return;
-    } else {
-      _ws->text(clientId, _protocol.generateError(msg.requestId, "pairing_failed"));
+    if (!constantTimeEquals(msg.pairingDigits, pairingCode, WIFI_PAIRING_DIGITS)) {
+      recordPairFailure(now);
+      _ws->text(clientId, _protocol.generateError(
+        msg.requestId,
+        pairingRateLimited(now) ? "rate_limited" : "pairing_failed"
+      ));
       logEvent("WARN", "pair_failed");
       return;
     }
-  }
 
-  if (msg.type == WebMessageType::STOP) {
-    if ((_session.active && _session.clientId == clientId) && 
-        (!msg.hasToken || constantTimeEquals(msg.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS))) {
-      requestEmergencyStopFromWifi(clientId);
+    char token[WIFI_SESSION_TOKEN_HEX_CHARS + 1] = {};
+    generateToken(token);
+    bool paired = false;
+    portENTER_CRITICAL(&_stateMux);
+    if (!_session.active || _session.clientId == clientId) {
+      _session = {};
+      _session.active = true;
+      _session.clientId = clientId;
+      strlcpy(_session.token, token, sizeof(_session.token));
       _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
       _session.lastAcceptedCommandMs = now;
-      if (msg.hasRequestId) {
-        _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
-      }
+      _pairingCode[0] = '\0';
+      state->failedPairAttempts = 0;
+      _globalPairWindowStartedMs = now;
+      _globalFailedPairAttempts = 0;
+      _pairingLockedUntilMs = 0;
+      paired = true;
+    }
+    portEXIT_CRITICAL(&_stateMux);
+
+    if (!paired) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "controller_busy"));
       return;
     }
-    if (msg.hasToken) {
-      _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
-    } else {
-      _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
-    }
+
+    _status->clearPairingCode();
+    _status->setWifiStatus(true, _apSsid, _apIp, _ws->count(), true, false);
+    logEvent("INFO", "paired");
+
+    JsonDocument ackDoc;
+    ackDoc["type"] = "paired";
+    if (msg.hasRequestId) ackDoc["id"] = msg.requestId;
+    ackDoc["ok"] = true;
+    ackDoc["token"] = token;
+    ackDoc["leaseMs"] = WIFI_CONTROLLER_LEASE_MS;
+    String ackStr;
+    serializeJson(ackDoc, ackStr);
+    _ws->text(clientId, ackStr);
+
+    broadcastTelemetry();
+    sendEvents(clientId);
     return;
   }
 
-  if (!_session.active || _session.clientId != clientId) {
-    _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
-    return;
-  }
-  
-  if (!msg.hasToken || !constantTimeEquals(msg.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS)) {
-    _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
+  if (msg.type != WebMessageType::STOP) {
+    bool controllerOwned = false;
+    portENTER_CRITICAL(&_stateMux);
+    controllerOwned = _session.active && _session.clientId == clientId;
+    portEXIT_CRITICAL(&_stateMux);
+    if (!controllerOwned) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
+      return;
+    }
+    if (!controllerMatches(clientId, msg)) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
+      return;
+    }
+    if (!acceptRequestId(msg.requestId)) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
+      return;
+    }
+  } else {
+    bool controllerOwned = false;
+    bool tokenMatches = !msg.hasToken;
+    portENTER_CRITICAL(&_stateMux);
+    controllerOwned = _session.active && _session.clientId == clientId;
+    if (controllerOwned && msg.hasToken) {
+      tokenMatches = constantTimeEquals(msg.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS);
+    }
+    if (controllerOwned) {
+      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
+      _session.lastAcceptedCommandMs = now;
+    }
+    portEXIT_CRITICAL(&_stateMux);
+    if (!controllerOwned) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
+      return;
+    }
+    if (!tokenMatches) {
+      _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
+      return;
+    }
+    requestEmergencyStopFromWifi(clientId, SafetyFault::NONE);
+    if (msg.hasRequestId) {
+      _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
+    }
     return;
   }
 
@@ -374,8 +595,10 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   qc.clientId = clientId;
   
   if (enqueueCommand(qc)) {
+    portENTER_CRITICAL(&_stateMux);
     _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
     _session.lastAcceptedCommandMs = now;
+    portEXIT_CRITICAL(&_stateMux);
   } else {
     _ws->text(clientId, _protocol.generateError(msg.requestId, "queue_full"));
   }
@@ -386,45 +609,74 @@ void WifiControl::update() {
   
   uint32_t now = millis();
 
-  if (pairingAvailable() && (now - _pairingStartTime > WIFI_PAIRING_CODE_LIFETIME_MS)) {
+  bool pairingExpired = false;
+  bool sessionActive = false;
+  portENTER_CRITICAL(&_stateMux);
+  if (_pairingCode[0] != '\0' && now - _pairingStartTime > WIFI_PAIRING_CODE_LIFETIME_MS) {
     _pairingCode[0] = '\0';
+    pairingExpired = true;
+  }
+  sessionActive = _session.active;
+  portEXIT_CRITICAL(&_stateMux);
+  if (pairingExpired) {
     _status->clearPairingCode();
-    _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, _session.active, false);
+    _status->setWifiStatus(true, _apSsid, _apIp, _ws ? _ws->count() : 0, sessionActive, false);
     broadcastTelemetry();
   }
 
   if (_ws) _ws->cleanupClients();
+  evictIdleUnpairedClients(now);
   syncStatus();
 
+  bool leaseExpired = false;
+  bool driveWatchdogExpired = false;
+  uint32_t controllerId = 0;
+  portENTER_CRITICAL(&_stateMux);
   if (_session.active) {
-    if (now > _session.leaseExpiryMs) {
-      logEvent("WARN", "lease_expired");
-      revokeController();
-    } else if (!_session.driveWatchdogStopped && _session.lastActiveDriveMs != 0 && (now - _session.lastActiveDriveMs > WIFI_DRIVE_WATCHDOG_MS)) {
-      requestEmergencyStopFromWifi(_session.clientId);
+    controllerId = _session.clientId;
+    if (static_cast<int32_t>(now - _session.leaseExpiryMs) >= 0) {
+      leaseExpired = true;
+    } else if (!_session.driveWatchdogStopped &&
+               _session.lastActiveDriveMs != 0 &&
+               now - _session.lastActiveDriveMs > WIFI_DRIVE_WATCHDOG_MS) {
+      driveWatchdogExpired = true;
       _session.driveWatchdogStopped = true;
       _session.lastActiveDriveMs = 0;
-      logEvent("WARN", "drive_watchdog");
     }
+  }
+  portEXIT_CRITICAL(&_stateMux);
+
+  if (leaseExpired) {
+    logEvent("WARN", "lease_expired");
+    revokeController(SafetyFault::CONTROLLER_LEASE_EXPIRED);
+  } else if (driveWatchdogExpired) {
+    requestEmergencyStopFromWifi(controllerId, SafetyFault::DRIVE_WATCHDOG);
+    logEvent("WARN", "drive_watchdog");
   }
 
   bool doPendingStop = false;
-  uint32_t stopClientId = 0;
+  SafetyFault stopFault = SafetyFault::NONE;
   portENTER_CRITICAL(&_queueMux);
   if (_pendingStop) {
     doPendingStop = true;
-    stopClientId = _pendingStopClientId;
+    stopFault = _pendingStopFault;
     _pendingStop = false;
   }
   portEXIT_CRITICAL(&_queueMux);
 
   if (doPendingStop) {
-    RobotCommand stopCmd;
-    stopCmd.kind = CommandKind::STOP;
-    stopCmd.source = ControlSource::WIFI;
-    _router->execute(stopCmd);
+    if (stopFault == SafetyFault::NONE) {
+      RobotCommand stopCmd;
+      stopCmd.kind = CommandKind::STOP;
+      stopCmd.source = ControlSource::WIFI;
+      _router->execute(stopCmd);
+    } else {
+      _router->emergencyStop(stopFault);
+    }
+    portENTER_CRITICAL(&_stateMux);
     _session.driveWatchdogStopped = true;
     _session.lastActiveDriveMs = 0;
+    portEXIT_CRITICAL(&_stateMux);
     broadcastTelemetry();
   }
 
@@ -447,17 +699,23 @@ void WifiControl::update() {
         ok = _router->execute(qc.command);
         if (!ok && qc.command.kind == CommandKind::MOVE) {
           if (_robot) {
-            SafetyStopReason reason = _robot->lastSafetyStopReason();
-            if (reason == SafetyStopReason::OBSTACLE_BLOCKED) {
+            const SafetyFault fault = _robot->safetyFault();
+            if (fault == SafetyFault::OBSTACLE_BLOCKED) {
               replyMsg = "obstacle_blocked";
-            } else if (reason == SafetyStopReason::RANGE_SENSOR_INVALID || reason == SafetyStopReason::RANGE_SENSOR_STALE) {
+            } else if (fault == SafetyFault::RANGE_SENSOR_INVALID) {
               replyMsg = "sensor_unavailable";
+            } else if (fault != SafetyFault::NONE) {
+              replyMsg = SafetySupervisor::faultName(fault);
             }
           }
         }
-        if (qc.command.kind == CommandKind::MOVE) {
-          _session.lastActiveDriveMs = millis();
-          _session.driveWatchdogStopped = false;
+        if (qc.command.kind == CommandKind::MOVE && ok) {
+          portENTER_CRITICAL(&_stateMux);
+          if (_session.active && _session.clientId == qc.clientId) {
+            _session.lastActiveDriveMs = millis();
+            _session.driveWatchdogStopped = false;
+          }
+          portEXIT_CRITICAL(&_stateMux);
         }
       }
     } else {
@@ -482,10 +740,16 @@ void WifiControl::broadcastTelemetry() {
   RobotTelemetry t;
   t.revision = _router->currentEpoch();
   t.uptimeMs = millis();
+  t.protocolVersion = CONTROL_PROTOCOL_VERSION;
+  t.configSchemaVersion = CONFIG_SCHEMA_VERSION;
+  t.hardwareManifestVersion = HARDWARE_MANIFEST_VERSION;
+  t.safetyPolicyVersion = SAFETY_POLICY_VERSION;
   t.wifiApRunning = _running && WIFI_START_SOFT_AP;
   t.wifiClientCount = _ws ? _ws->count() : 0;
+  portENTER_CRITICAL(&_stateMux);
   t.controllerPresent = _session.active;
-  t.pairingAvailable = pairingAvailable();
+  t.pairingAvailable = _pairingCode[0] != '\0';
+  portEXIT_CRITICAL(&_stateMux);
   
   if (_robot) {
     ActuatorCapabilities caps = _robot->actuatorCapabilities();
@@ -495,6 +759,9 @@ void WifiControl::broadcastTelemetry() {
     
     t.motorsArmed = _robot->isArmed();
     t.motorAllowedByFirmware = ALLOW_MOTOR_ARMING;
+    t.safetyState = SafetySupervisor::stateName(_robot->safetyState());
+    t.safetyFault = SafetySupervisor::faultName(_robot->safetyFault());
+    t.safetyStateChangedMs = _robot->safetyStateChangedAtMs();
   }
   
   t.driveMode = DriveMode::STOPPED;

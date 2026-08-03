@@ -34,7 +34,10 @@ struct RobotTelemetry {
   const char* lastSafetyStopReason = "";
   const char* autonomyMode = "";
   const char* autonomyState = "";
-  
+  const char* safetyState = "";
+  const char* safetyFault = "";
+  uint32_t safetyStateChangedMs = 0;
+
   bool hasDrive = false;
   bool fourWheelDrive = false;
   bool hasManipulators = false;
@@ -49,5 +52,9 @@ struct RobotTelemetry {
   float gyroXDps = 0.0f;
   float gyroYDps = 0.0f;
   float gyroZDps = 0.0f;
-};
 
+  uint8_t protocolVersion = 0;
+  uint16_t configSchemaVersion = 0;
+  uint16_t hardwareManifestVersion = 0;
+  uint16_t safetyPolicyVersion = 0;
+};

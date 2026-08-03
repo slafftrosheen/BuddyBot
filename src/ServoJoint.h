@@ -19,10 +19,10 @@ public:
   // New JointMotion API with explicit easing
   bool moveTo(int16_t targetDeg, uint16_t durationMs, JointEasing easing);
   void update(uint32_t nowMs);
-  void cancelMotion();
-  bool motionActive() const;
-  JointMotionState motionState() const;
-  int16_t target() const;
+  void cancelMotion() override;
+  bool motionActive() const override;
+  JointMotionState motionState() const override;
+  int16_t target() const override;
 
 private:
   Servo8Bus* _bus = nullptr;
