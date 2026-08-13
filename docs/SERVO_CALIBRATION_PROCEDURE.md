@@ -1,6 +1,6 @@
-# BuddyBot Servo Calibration Procedure
+# Halo BuddyBot Servo Calibration Procedure
 
-BuddyBot supports a 4-wheel continuous-rotation drive system and 4 positional manipulators (head, left arm, right arm, accessory). Before running autonomous behavior or enabling WiFi, you must verify the center point of the continuous rotation servos and the safe travel limits of the positional servos.
+Halo BuddyBot supports a 4-wheel continuous-rotation drive system and 4 positional manipulators (head, left arm, right arm, accessory). Before running autonomous behavior or enabling WiFi, you must verify the center point of the continuous rotation servos and the safe travel limits of the positional servos.
 
 Calibration is only allowed via USB Serial connection for safety. Ensure the robot is elevated (wheels not touching the ground) during this procedure.
 

@@ -8,7 +8,7 @@
 #include "arduino_secrets.h"
 
 // ---------- Firmware ----------
-constexpr char FIRMWARE_NAME[] = "BuddyBot OS";
+constexpr char FIRMWARE_NAME[] = "Halo BuddyBot";
 constexpr char FIRMWARE_VERSION[] = "0.3.0-beta.1";
 constexpr char FIRMWARE_CHANNEL[] = "hardware-safety-beta";
 constexpr uint8_t CONTROL_PROTOCOL_VERSION = 1;

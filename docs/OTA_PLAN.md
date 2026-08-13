@@ -1,11 +1,11 @@
-# BuddyBot OTA (Over-The-Air) Updates Plan
+# Halo BuddyBot OTA (Over-The-Air) Updates Plan
 
-This document outlines the safety and security requirements for implementing OTA firmware updates on BuddyBot in the future.
+This document outlines the safety and security requirements for implementing OTA firmware updates on the physical embodiment runtime in the future.
 
 ## Principles
 
 1. **Disabled by Default:** OTA must be an opt-in feature, disabled by default in standard builds.
-2. **Physical Confirmation Required:** To prevent unauthorized or accidental flashing, a user must physically interact with BuddyBot (e.g., pressing a specific button combination) to accept an incoming OTA transfer.
+2. **Physical Confirmation Required:** To prevent unauthorized or accidental flashing, a user must physically interact with Halo BuddyBot (e.g., pressing a specific button combination) to accept an incoming OTA transfer.
 3. **Hardware Safety:**
    - OTA updates must ONLY be allowed while motors are fully disarmed.
    - Any active Wi-Fi controller must be disconnected and their session token revoked before the upload begins.

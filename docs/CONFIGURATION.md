@@ -1,6 +1,7 @@
 # Configuration Guide
 
-BuddyBot uses a unified configuration file (`src/Config.h`) to manage everything from hardware settings to safety defaults.
+Halo BuddyBot uses a unified configuration file (`src/Config.h`) to manage everything from hardware settings to safety defaults.
+Config.h controls physical embodiment firmware configuration and safety policy.
 
 ## Secrets and Credentials
 

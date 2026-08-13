@@ -1,6 +1,8 @@
-# BuddyBot Wi-Fi Protocol
+# Halo BuddyBot Local Control Protocol
 
-BuddyBot implements a SoftAP that serves a WebSocket interface for browser control.
+The local WebSocket interface is a low-level operational/control interface for commissioning, diagnostics, and local operation.
+
+Halo integration should eventually use the transport-independent embodiment contract rather than coupling cognition directly to the legacy WebSocket protocol.
 
 ## Overview
 - **SSID / Password**: Must be provisioned in the ignored `src/arduino_secrets.h`; copy the example file and replace its placeholders before building.

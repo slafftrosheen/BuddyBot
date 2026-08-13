@@ -1,6 +1,6 @@
 # Servo Wiring and Calibration Guide
 
-This document describes the 4-Wheel Drive + Manipulator configuration for BuddyBot using a single M5Stack Unit 8Servos module.
+This document describes the 4-Wheel Drive + Manipulator configuration for Halo BuddyBot using a single M5Stack Unit 8Servos module.
 
 ## Channel Map (SERVO8_FOUR_WHEEL_MANIPULATOR)
 
@@ -25,7 +25,7 @@ This document describes the 4-Wheel Drive + Manipulator configuration for BuddyB
 
 ## Calibration
 
-By default, BuddyBot disables `ALLOW_MOTOR_ARMING` and `ALLOW_ACTION_DRIVE_MOVEMENT`.
+By default, Halo BuddyBot disables `ALLOW_MOTOR_ARMING` and `ALLOW_ACTION_DRIVE_MOVEMENT`.
 
 1. To calibrate wheels, elevate the chassis so the wheels can spin freely.
 2. Enable `ALLOW_MOTOR_ARMING` in `src/Config.h`.

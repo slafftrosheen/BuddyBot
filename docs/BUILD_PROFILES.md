@@ -1,6 +1,6 @@
 # Build Profiles
 
-BuddyBot uses a concept of "Build Profiles" to support different physical hardware configurations while maintaining a single firmware binary. A build profile defines which controllers are used for drive, joints, and accessories.
+Halo BuddyBot supports multiple physical hardware configurations through Build Profiles. Build Profiles describe the physical embodiment.
 
 The active profile is defined in `src/Config.h` via `ACTIVE_BUILD_PROFILE`.
 

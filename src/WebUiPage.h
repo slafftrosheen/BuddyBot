@@ -7,7 +7,7 @@ const char WEB_UI_HTML[] PROGMEM = R"=====(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>BuddyBot Web UI</title>
+<title>Halo BuddyBot</title>
 <style>
 :root {
   --bg-color: #121212;
@@ -73,7 +73,7 @@ input { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 6px; bor
   <div id="loginModal">
     <div class="panel">
       <h2>Pair Controller</h2>
-      <p>Enter the code shown on BuddyBot's screen</p>
+      <p>Enter the pairing code shown on Halo BuddyBot</p>
       <input type="text" id="pinInput" placeholder="1234 5678">
       <button class="btn" style="width: 100%; background: var(--accent); color: #000;" onclick="submitPin()">Submit</button>
       <button class="btn" style="width: 100%; margin-top: 10px;" onclick="closeModal()">Close (View Only)</button>

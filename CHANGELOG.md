@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+### Changed
+- Repositioned BuddyBot as the physical robotic embodiment runtime for the Halo Cognitive Runtime.
+- Established the Halo ↔ BuddyBot architectural boundary.
+- Updated project and user-facing documentation to reflect the embodiment-host role.
+
+## [0.3.0-beta.1] - 2026-07-22
 ### Added
 - Added a persisted `SafetySupervisor` state machine, local E-stop chord, task watchdog, structured diagnostics, and safety telemetry.
 - Added stricter hardware-manifest validation, safety policy tests, and protocol validation coverage.

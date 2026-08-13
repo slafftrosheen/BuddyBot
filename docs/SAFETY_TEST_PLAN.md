@@ -1,6 +1,8 @@
-# BuddyBot Safety Test Plan
+# Halo BuddyBot Safety Test Plan
 
-This document outlines the standard verification steps required to validate the safety systems of the BuddyBot firmware. It must be run before any major release, and especially after touching `RobotHal.cpp`, `ServoDrive.cpp`, `WifiControl.cpp`, or `AutonomyManager.cpp`.
+Halo connectivity is not a prerequisite for local physical safety. SafetySupervisor and the local E-stop remain authoritative.
+
+This document outlines the standard verification steps required to validate the safety systems of the Halo BuddyBot firmware. It must be run before any major release, and especially after touching `RobotHal.cpp`, `ServoDrive.cpp`, `WifiControl.cpp`, or `AutonomyManager.cpp`.
 
 ## Prerequisites
 - Hardware: M5StickS3 connected to Unit 8Servos, 4 continuous rotation servos connected on ports 0-3.
@@ -8,8 +10,8 @@ This document outlines the standard verification steps required to validate the 
 - Sonic sensor connected to I2C.
 
 ## 1. Boot Safety
-1. **Power on** BuddyBot.
-2. Verify the screen displays "BuddyBot OS", runs boot diagnostics, and the face appears.
+1. **Power on** Halo BuddyBot.
+2. Verify the screen displays "Halo BuddyBot", runs boot diagnostics, and the face appears.
 3. Verify motors are **NOT spinning**.
 4. Check the serial console for `BOOT: -> COMPLETE`.
 5. Run the `STATUS` command. Verify `motors_armed=false`, `drive_mode=STOPPED`, and `safety_state=disarmed`.
@@ -51,7 +53,7 @@ This document outlines the standard verification steps required to validate the 
 3. Attempt to arm motors via Web UI or Serial `ARM` command.
 4. **Expected Result**:
    - Motors do NOT arm.
-   - BuddyBot plays a WORRIED expression.
+   - Halo BuddyBot plays a WORRIED expression.
    - `STATUS` shows `motors_armed=false`.
 
 ## 6. Local E-Stop and Recovery
