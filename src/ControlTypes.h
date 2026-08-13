@@ -61,4 +61,6 @@ struct RobotCommand {
   // For diagnostics / joint
   int16_t arg1 = 0;
   int16_t arg2 = 0;
+  
+  uint32_t correlationId = 0;
 };
