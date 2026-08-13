@@ -60,10 +60,6 @@ void setup() {
 
   Serial.begin(115200);
   randomSeed(esp_random());
-<<<<<<< HEAD:src/BuddyBot.cpp
-  Serial.printf("M5 Board ID: %d\n", (int)M5.getBoard());
-  Serial.printf("M5 Display: %dx%d\n", M5.Display.width(), M5.Display.height());
-=======
   systemHealth.begin();
 
   SafetyPolicyConfig safetyConfig;
@@ -75,7 +71,6 @@ void setup() {
   safetyConfig.imuMaximumGyroDps = IMU_MAX_GYRO_DPS;
   safety.configure(safetyConfig);
   safety.begin();
->>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279:src/BuddyBot.ino
 
   persona.begin();
   renderer.begin();
@@ -87,6 +82,7 @@ void setup() {
 
   robot.begin(&persona, &hal, &actions);
   robot.setSafetySupervisor(&safety);
+  robot.setBootDiagnostics(&bootDiag);
 
   autonomy.begin(&robot);
   systemStatus.begin(&robot, &hal, &bootDiag, &systemHealth);

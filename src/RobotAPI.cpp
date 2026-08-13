@@ -2,6 +2,7 @@
 #include <M5Unified.h>
 #include "BuildProfiles.h"
 #include "SafetySupervisor.h"
+#include "BootDiagnostics.h"
 
 void RobotAPI::begin(
   PersonaManager* persona,
@@ -26,6 +27,69 @@ void RobotAPI::begin(
 
 void RobotAPI::setSafetySupervisor(SafetySupervisor* supervisor) {
   _safetySupervisor = supervisor;
+}
+
+void RobotAPI::setBootDiagnostics(const BootDiagnostics* diag) {
+  _bootDiag = diag;
+}
+
+RuntimeSnapshot RobotAPI::runtimeSnapshot() const {
+  RuntimeSnapshot snap;
+  snap.capturedAtMs = millis();
+
+  // Safety
+  snap.safety = buildSafetySnapshot(_safetySupervisor, millis());
+
+  // Drive
+  snap.drive.available = driveAvailable();
+  snap.drive.active = false;
+  snap.drive.forward = false;
+  snap.drive.blocked = obstacleDetected();
+  snap.drive.mode = static_cast<uint8_t>(DriveMode::STOPPED);
+  snap.drive.lastCommandAtMs = lastDriveCommandAtMs();
+  if (_hal && _hal->drive()) {
+    DriveMode m = _hal->drive()->driveMode();
+    snap.drive.active = (m != DriveMode::STOPPED);
+    snap.drive.forward = (m == DriveMode::FORWARD);
+    snap.drive.mode = static_cast<uint8_t>(m);
+  }
+
+  // Range
+  RangeReading range = rangeReading();
+  snap.range.available = _hal && _hal->range() != nullptr;
+  snap.range.valid = range.valid;
+  snap.range.distanceMm = range.distanceMm;
+  snap.range.health = static_cast<uint8_t>(rangeSensorHealth());
+  snap.range.sampleTimeMs = range.sampleTimeMs;
+  snap.range.consecutiveInvalid = rangeConsecutiveInvalid();
+
+  // IMU
+  const ImuReading& imu = imuReading();
+  snap.imu.available = imu.available;
+  snap.imu.valid = imu.valid;
+  snap.imu.sampleTimeMs = imu.sampleTimeMs;
+  snap.imu.accelXG = imu.accelXG;
+  snap.imu.accelYG = imu.accelYG;
+  snap.imu.accelZG = imu.accelZG;
+  snap.imu.gyroXDps = imu.gyroXDps;
+  snap.imu.gyroYDps = imu.gyroYDps;
+  snap.imu.gyroZDps = imu.gyroZDps;
+
+  // Behavior
+  snap.behavior.actionRunning = _actions ? _actions->isRunning() : false;
+  snap.behavior.action = static_cast<uint8_t>(currentAction());
+  snap.behavior.mood = static_cast<uint8_t>(getMood());
+  snap.behavior.persona = static_cast<uint8_t>(_persona ? _persona->id() : PersonaId::PIXEL);
+  snap.behavior.autonomyEnabled = autonomyEnabled();
+
+  // Hardware
+  snap.hardware.driveAvailable = snap.drive.available;
+  snap.hardware.rangeAvailable = snap.range.available;
+  snap.hardware.imuAvailable = snap.imu.available;
+  snap.hardware.servoBusPresent = _bootDiag ? _bootDiag->status().servoBusPresent : false;
+  snap.hardware.sonicPresent = _bootDiag ? _bootDiag->status().sonicPresent : false;
+
+  return snap;
 }
 
 void RobotAPI::update() {
@@ -437,6 +501,10 @@ void RobotAPI::clearRememberedDriveCommand() {
   _hasSavedCmd = false;
   _lastManualDriveCmd = {DriveMode::STOPPED, 0, 0, 0};
   _lastManualDriveCmdMs = millis();
+}
+
+uint32_t RobotAPI::lastDriveCommandAtMs() const {
+  return _hasSavedCmd ? _lastManualDriveCmdMs : 0;
 }
 
 const ObstacleSafetyStatus& RobotAPI::obstacleSafetyStatus() const {

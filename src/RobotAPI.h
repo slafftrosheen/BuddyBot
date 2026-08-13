@@ -10,12 +10,18 @@
 #include "ImuMonitor.h"
 #include "ControlTypes.h"
 #include "SafetySupervisor.h"
+#include "RuntimeSnapshot.h"
+
+class BootDiagnostics;
 
 class RobotAPI {
 public:
   void begin(PersonaManager* persona, RobotHal* hal, RobotActions* actions);
   void setSafetySupervisor(SafetySupervisor* supervisor);
+  void setBootDiagnostics(const BootDiagnostics* diag);
   void update();
+
+  RuntimeSnapshot runtimeSnapshot() const;
 
   Mood getMood() const;
   Mood baseMood() const;
@@ -66,6 +72,7 @@ public:
   void rememberDriveCommand(const DriveCommand& cmd);
   bool lastDriveCommand(DriveCommand& out) const;
   void clearRememberedDriveCommand();
+  uint32_t lastDriveCommandAtMs() const;
 
   const ObstacleSafetyStatus& obstacleSafetyStatus() const;
   bool forwardMotionAllowed() const;
@@ -90,6 +97,7 @@ private:
   ObstacleSafety _safety;
   ImuMonitor _imu;
   SafetySupervisor* _safetySupervisor = nullptr;
+  const BootDiagnostics* _bootDiag = nullptr;
   Mood _mood = Mood::IDLE;
   bool _autonomyEnabled = false;
 
