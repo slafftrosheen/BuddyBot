@@ -15,7 +15,7 @@ void test_context_copies_snapshot(void) {
     
     RuntimeCapabilities caps;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, "12345");
     
     TEST_ASSERT_EQUAL_UINT32(12345, ctx.snapshot.capturedAtMs);
     TEST_ASSERT_TRUE(ctx.snapshot.safety.armed);
@@ -29,7 +29,7 @@ void test_context_copies_capabilities(void) {
     caps.drive.permitted = true;
     caps.drive.reason = CapabilityReason::SAFETY_FAULT;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, "12345");
     
     TEST_ASSERT_TRUE(ctx.capabilities.drive.capable);
     TEST_ASSERT_FALSE(ctx.capabilities.drive.available);
@@ -38,11 +38,11 @@ void test_context_copies_capabilities(void) {
 }
 
 void test_make_no_action(void) {
-    CognitiveDecision decision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, 555);
+    CognitiveDecision decision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, "555");
     
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::NO_ACTION_REQUIRED), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(555, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("555", decision.intentId);
 }
 
 void test_make_intent(void) {
@@ -50,24 +50,24 @@ void test_make_intent(void) {
     intent.kind = IntentKind::MOVE;
     intent.driveMode = DriveMode::FORWARD;
     
-    CognitiveDecision decision = makeIntent(intent, 777);
+    CognitiveDecision decision = makeIntent(intent, "777");
     
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::INTENT), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentKind::MOVE), static_cast<uint8_t>(decision.intent.kind));
-    TEST_ASSERT_EQUAL_UINT32(777, decision.correlationId);
-    TEST_ASSERT_EQUAL_UINT32(777, decision.intent.correlationId);
+    TEST_ASSERT_EQUAL_STRING("777", decision.intentId);
+    TEST_ASSERT_EQUAL_STRING("777", decision.intent.intentId);
 }
 
 void test_correlation_propagation(void) {
     RobotIntent intent;
     intent.kind = IntentKind::ACTION;
-    intent.correlationId = 1234; // input intent has some ID
+    strcpy(intent.intentId, "1234"); // input intent has some ID
     
-    CognitiveDecision decision = makeIntent(intent, 9999);
+    CognitiveDecision decision = makeIntent(intent, "9999");
     
     // Expected: both decision and intent are updated to the final assigned ID
-    TEST_ASSERT_EQUAL_UINT32(9999, decision.correlationId);
-    TEST_ASSERT_EQUAL_UINT32(9999, decision.intent.correlationId);
+    TEST_ASSERT_EQUAL_STRING("9999", decision.intentId);
+    TEST_ASSERT_EQUAL_STRING("9999", decision.intent.intentId);
 }
 
 void test_safety_state_remains_data_only(void) {
@@ -75,7 +75,7 @@ void test_safety_state_remains_data_only(void) {
     snap.safety.state = 2; // Arbitrary state constant for ESTOP
     RuntimeCapabilities caps;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, "12345");
     
     TEST_ASSERT_EQUAL_UINT8(2, static_cast<uint8_t>(ctx.snapshot.safety.state));
     // No mutation of SafetySupervisor because it's not even included!
@@ -89,7 +89,7 @@ void test_capability_state_remains_data_only(void) {
     caps.drive.permitted = false;
     caps.drive.reason = CapabilityReason::MOTOR_ARMING_DISABLED;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, "12345");
     
     TEST_ASSERT_TRUE(ctx.capabilities.drive.capable);
     TEST_ASSERT_TRUE(ctx.capabilities.drive.available);

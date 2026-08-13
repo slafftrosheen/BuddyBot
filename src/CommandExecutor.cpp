@@ -5,15 +5,40 @@ CommandExecutor::CommandExecutor(ControlRouter* router)
     : _router(router) {
 }
 
-bool CommandExecutor::execute(const RobotCommand& command) {
+ExecutionResult CommandExecutor::execute(const RobotCommand& command, const char* intentId) {
+    ExecutionResult res;
+    strncpy(res.intentId, intentId, sizeof(res.intentId) - 1);
+    res.intentId[sizeof(res.intentId) - 1] = '\0';
+
     if (!_router) {
-        return false;
+        res.status = ExecutionStatus::FAILED;
+        strncpy(res.reason, "NO_ROUTER", sizeof(res.reason) - 1);
+        res.reason[sizeof(res.reason) - 1] = '\0';
+        return res;
     }
     if (command.kind == CommandKind::NONE) {
-        return false;
+        res.status = ExecutionStatus::FAILED;
+        strncpy(res.reason, "INVALID_COMMAND", sizeof(res.reason) - 1);
+        res.reason[sizeof(res.reason) - 1] = '\0';
+        return res;
     }
     if (command.source != ControlSource::HALO) {
-        return false;
+        res.status = ExecutionStatus::FAILED;
+        strncpy(res.reason, "INVALID_SOURCE", sizeof(res.reason) - 1);
+        res.reason[sizeof(res.reason) - 1] = '\0';
+        return res;
     }
-    return _router->execute(command);
+    
+    bool success = _router->execute(command);
+    if (success) {
+        res.status = ExecutionStatus::SUCCEEDED;
+        res.reason[0] = '\0';
+    } else {
+        res.status = ExecutionStatus::DENIED;
+        SafetyFault fault = _router->safetyFault();
+        const char* faultStr = SafetySupervisor::faultName(fault);
+        strncpy(res.reason, faultStr, sizeof(res.reason) - 1);
+        res.reason[sizeof(res.reason) - 1] = '\0';
+    }
+    return res;
 }

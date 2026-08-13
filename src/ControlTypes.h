@@ -63,5 +63,5 @@ struct RobotCommand {
   int16_t arg1 = 0;
   int16_t arg2 = 0;
   
-  uint32_t correlationId = 0;
+  char intentId[37] = {0};
 };

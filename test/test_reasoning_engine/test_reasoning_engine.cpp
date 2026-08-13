@@ -30,7 +30,7 @@ void test_null_provider(void) {
 
 void test_no_action(void) {
     FixedDecisionProvider provider;
-    provider.nextDecision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, 123);
+    provider.nextDecision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, "123");
     
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;
@@ -40,14 +40,14 @@ void test_no_action(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ReasoningResult::SUCCESS), static_cast<uint8_t>(res));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(outDecision.kind));
-    TEST_ASSERT_EQUAL_UINT32(123, outDecision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("123", outDecision.intentId);
 }
 
 void test_valid_intent(void) {
     FixedDecisionProvider provider;
     RobotIntent intent;
     intent.kind = IntentKind::MOVE;
-    provider.nextDecision = makeIntent(intent, 1234);
+    provider.nextDecision = makeIntent(intent, "1234");
 
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;
@@ -58,15 +58,15 @@ void test_valid_intent(void) {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ReasoningResult::SUCCESS), static_cast<uint8_t>(res));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::INTENT), static_cast<uint8_t>(outDecision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentKind::MOVE), static_cast<uint8_t>(outDecision.intent.kind));
-    TEST_ASSERT_EQUAL_UINT32(1234, outDecision.correlationId);
-    TEST_ASSERT_EQUAL_UINT32(1234, outDecision.intent.correlationId);
+    TEST_ASSERT_EQUAL_STRING("1234", outDecision.intentId);
+    TEST_ASSERT_EQUAL_STRING("1234", outDecision.intent.intentId);
 }
 
 void test_invalid_none_intent(void) {
     FixedDecisionProvider provider;
     RobotIntent intent;
     intent.kind = IntentKind::NONE;
-    provider.nextDecision = makeIntent(intent, 555); // correlation IDs match
+    provider.nextDecision = makeIntent(intent, "555"); // correlation IDs match
 
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;
@@ -81,9 +81,9 @@ void test_correlation_mismatch(void) {
     FixedDecisionProvider provider;
     RobotIntent intent;
     intent.kind = IntentKind::MOVE;
-    provider.nextDecision = makeIntent(intent, 100);
+    provider.nextDecision = makeIntent(intent, "100");
     // Break the correlation
-    provider.nextDecision.intent.correlationId = 200;
+    strcpy(provider.nextDecision.intent.intentId, "200");
 
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;
@@ -96,7 +96,7 @@ void test_correlation_mismatch(void) {
 
 void test_provider_preserves_context(void) {
     FixedDecisionProvider provider;
-    provider.nextDecision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, 1);
+    provider.nextDecision = makeNoAction(CognitiveDecisionReason::NO_ACTION_REQUIRED, "1");
 
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;

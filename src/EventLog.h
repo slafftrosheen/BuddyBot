@@ -6,7 +6,7 @@ struct EventLogEntry {
   const char* severity;
   const char* code;
   const char* component;
-  uint32_t correlationId;
+  char intentId[37];
 };
 
 class EventLog {
@@ -18,14 +18,32 @@ public:
     const char* severity,
     const char* code,
     const char* component = "system",
-    uint32_t correlationId = 0
+    const char* intentId = nullptr
   ) {
     lock();
     if (_count < CAPACITY) {
-      _entries[_count] = {millis(), severity, code, component, correlationId};
+      _entries[_count].timestampMs = millis();
+      _entries[_count].severity = severity;
+      _entries[_count].code = code;
+      _entries[_count].component = component;
+      if (intentId) {
+          strncpy(_entries[_count].intentId, intentId, sizeof(_entries[_count].intentId) - 1);
+          _entries[_count].intentId[sizeof(_entries[_count].intentId) - 1] = '\0';
+      } else {
+          _entries[_count].intentId[0] = '\0';
+      }
       _count++;
     } else {
-      _entries[_head] = {millis(), severity, code, component, correlationId};
+      _entries[_head].timestampMs = millis();
+      _entries[_head].severity = severity;
+      _entries[_head].code = code;
+      _entries[_head].component = component;
+      if (intentId) {
+          strncpy(_entries[_head].intentId, intentId, sizeof(_entries[_head].intentId) - 1);
+          _entries[_head].intentId[sizeof(_entries[_head].intentId) - 1] = '\0';
+      } else {
+          _entries[_head].intentId[0] = '\0';
+      }
       _head = (_head + 1) % CAPACITY;
     }
     unlock();

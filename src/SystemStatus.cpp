@@ -107,13 +107,13 @@ void SystemStatus::printEvents() const {
   Serial.printf("events_count=%u\n", count);
   for (size_t i = 0; i < count; i++) {
     Serial.printf(
-      "event[%u] ts=%u sev=%s component=%s code=%s correlation=%u\n",
+      "event[%u] ts=%u sev=%s component=%s code=%s intentId=%s\n",
       i,
       entries[i].timestampMs,
       entries[i].severity,
       entries[i].component,
       entries[i].code,
-      entries[i].correlationId
+      entries[i].intentId
     );
   }
 }

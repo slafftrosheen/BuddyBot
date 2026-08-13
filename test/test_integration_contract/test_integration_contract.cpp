@@ -138,7 +138,7 @@ void test_integration_happy_path(void) {
     intent.kind = IntentKind::MOVE;
     intent.driveMode = DriveMode::FORWARD;
     intent.durationMs = 500;
-    intent.correlationId = 42;
+    strcpy(intent.intentId, "42");
 
     IntentResult res = gateway.submit(intent, caps);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
@@ -183,10 +183,10 @@ void test_integration_stale_capability_cannot_bypass_safety(void) {
     safety.physicalEstop(30);
 
     // CommandExecutor submits the previously accepted command
-    bool executed = executor.execute(res.command);
+    ExecutionResult executed = executor.execute(res.command, res.intentId);
 
     // SafetySupervisor MUST reject it despite the command being valid
-    TEST_ASSERT_FALSE(executed);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(executed.status));
 }
 
 void test_integration_safety_exceptions_preserved(void) {

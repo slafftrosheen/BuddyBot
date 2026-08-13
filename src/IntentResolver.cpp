@@ -7,10 +7,14 @@ IntentResult IntentResolver::resolve(
     IntentResult res;
     res.result = IntentResolution::INVALID_INTENT;
     res.reason = CapabilityReason::NONE;
-    res.correlationId = intent.correlationId;
+    strncpy(res.intentId, intent.intentId, sizeof(res.intentId) - 1);
+    res.intentId[sizeof(res.intentId) - 1] = '\0';
+    res.result = IntentResolution::ACCEPTED;
+
+    strncpy(res.command.intentId, intent.intentId, sizeof(res.command.intentId) - 1);
+    res.command.intentId[sizeof(res.command.intentId) - 1] = '\0';
     res.command.kind = CommandKind::NONE;
     res.command.source = ControlSource::HALO;
-    res.command.correlationId = intent.correlationId;
 
     switch (intent.kind) {
         case IntentKind::NONE:

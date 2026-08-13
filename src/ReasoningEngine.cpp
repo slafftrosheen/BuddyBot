@@ -32,7 +32,7 @@ ReasoningResult ReasoningEngine::evaluate(
         if (candidate.intent.kind == IntentKind::NONE) {
             return ReasoningResult::INVALID_DECISION;
         }
-        if (candidate.correlationId != candidate.intent.correlationId) {
+        if (strncmp(candidate.intentId, candidate.intent.intentId, sizeof(candidate.intentId)) != 0) {
             return ReasoningResult::INVALID_DECISION;
         }
     }

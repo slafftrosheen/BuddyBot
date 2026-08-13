@@ -32,15 +32,15 @@ void test_executor_valid_command_forwarded(void) {
 
     RobotCommand cmd;
     cmd.kind = CommandKind::STOP;
-    cmd.correlationId = 1234;
+    strcpy(cmd.intentId, "1234");
     cmd.source = ControlSource::HALO;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::ACCEPTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::STOP), static_cast<uint8_t>(s_lastCommand.kind));
-    TEST_ASSERT_EQUAL_UINT32(1234, s_lastCommand.correlationId);
+    TEST_ASSERT_EQUAL_STRING("1234", s_lastCommand.intentId);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(s_lastCommand.source));
 }
 
@@ -51,9 +51,9 @@ void test_executor_rejects_none(void) {
     RobotCommand cmd;
     cmd.kind = CommandKind::NONE;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_FALSE(s_routerExecuteCalled);
 }
 
@@ -64,9 +64,9 @@ void test_executor_null_router(void) {
     cmd.kind = CommandKind::STOP;
     cmd.source = ControlSource::HALO;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_FALSE(s_routerExecuteCalled);
 }
 
@@ -78,18 +78,18 @@ void test_executor_field_preservation(void) {
     cmd.kind = CommandKind::MOVE;
     cmd.driveMode = DriveMode::FORWARD;
     cmd.durationMs = 500;
-    cmd.correlationId = 9876;
+    strcpy(cmd.intentId, "9876");
     cmd.source = ControlSource::HALO;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::ACCEPTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
     
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::MOVE), static_cast<uint8_t>(s_lastCommand.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DriveMode::FORWARD), static_cast<uint8_t>(s_lastCommand.driveMode));
     TEST_ASSERT_EQUAL_UINT16(500, s_lastCommand.durationMs);
-    TEST_ASSERT_EQUAL_UINT32(9876, s_lastCommand.correlationId);
+    TEST_ASSERT_EQUAL_STRING("9876", s_lastCommand.intentId);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(s_lastCommand.source));
 }
 
@@ -105,7 +105,7 @@ void test_executor_command_immutability(void) {
 
     RobotCommand copy = original;
 
-    executor.execute(original);
+    executor.execute(original, original.intentId);
 
     // Verify original is untouched
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(copy.kind), static_cast<uint8_t>(original.kind));
@@ -123,9 +123,9 @@ void test_executor_router_rejection(void) {
     cmd.kind = CommandKind::STOP;
     cmd.source = ControlSource::HALO;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
 }
 
@@ -137,19 +137,19 @@ void test_executor_rejects_non_halo_source(void) {
     cmd.kind = CommandKind::MOVE;
     cmd.source = ControlSource::WIFI;
 
-    bool result = executor.execute(cmd);
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_FALSE(s_routerExecuteCalled);
 
     cmd.source = ControlSource::SERIAL_CTRL;
-    result = executor.execute(cmd);
-    TEST_ASSERT_FALSE(result);
+    result = executor.execute(cmd, cmd.intentId);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_FALSE(s_routerExecuteCalled);
 
     cmd.source = ControlSource::AUTONOMY;
-    result = executor.execute(cmd);
-    TEST_ASSERT_FALSE(result);
+    result = executor.execute(cmd, cmd.intentId);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_FALSE(s_routerExecuteCalled);
 }
 

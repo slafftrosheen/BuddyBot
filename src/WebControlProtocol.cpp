@@ -452,8 +452,8 @@ String WebControlProtocol::generateEventLog(const EventLogEntry* entries, size_t
     obj["sev"] = entries[i].severity;
     obj["code"] = entries[i].code;
     obj["component"] = entries[i].component;
-    if (entries[i].correlationId != 0) {
-      obj["correlationId"] = entries[i].correlationId;
+    if (entries[i].intentId[0] != '\0') {
+      obj["intentId"] = entries[i].intentId;
     }
   }
   String out;

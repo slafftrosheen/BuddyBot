@@ -1,5 +1,7 @@
 #pragma once
 #include "ControlTypes.h"
+#include "ControlRouter.h"
+#include "IntentTypes.h"
 
 class ControlRouter;
 
@@ -7,7 +9,7 @@ class CommandExecutor {
 public:
     explicit CommandExecutor(ControlRouter* router);
 
-    bool execute(const RobotCommand& command);
+    ExecutionResult execute(const RobotCommand& command, const char* intentId);
 
 private:
     ControlRouter* _router;

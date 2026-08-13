@@ -6,7 +6,7 @@ void tearDown(void) {}
 
 void test_estop(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 101;
+    strcpy(ctx.intentId, "101");
     ctx.snapshot.safety.estopped = true;
     
     RuleReasoningProvider provider;
@@ -14,12 +14,12 @@ void test_estop(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::SAFETY_BLOCKED), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(101, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("101", decision.intentId);
 }
 
 void test_fault(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 102;
+    strcpy(ctx.intentId, "102");
     ctx.snapshot.safety.faulted = true;
     
     RuleReasoningProvider provider;
@@ -27,12 +27,12 @@ void test_fault(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::SAFETY_BLOCKED), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(102, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("102", decision.intentId);
 }
 
 void test_boot(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 103;
+    strcpy(ctx.intentId, "103");
     ctx.snapshot.safety.bootComplete = false;
     
     RuleReasoningProvider provider;
@@ -40,12 +40,12 @@ void test_boot(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::OBSERVATION_ONLY), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(103, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("103", decision.intentId);
 }
 
 void test_drive_unavailable(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 104;
+    strcpy(ctx.intentId, "104");
     ctx.snapshot.safety.bootComplete = true;
     ctx.capabilities.drive.capable = true;
     ctx.capabilities.drive.available = false;
@@ -55,12 +55,12 @@ void test_drive_unavailable(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::CAPABILITY_UNAVAILABLE), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(104, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("104", decision.intentId);
 }
 
 void test_autonomy_disabled(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 105;
+    strcpy(ctx.intentId, "105");
     ctx.snapshot.safety.bootComplete = true;
     ctx.capabilities.drive.capable = true;
     ctx.capabilities.drive.available = true;
@@ -71,12 +71,12 @@ void test_autonomy_disabled(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::OBSERVATION_ONLY), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(105, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("105", decision.intentId);
 }
 
 void test_autonomy_not_permitted(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 106;
+    strcpy(ctx.intentId, "106");
     ctx.snapshot.safety.bootComplete = true;
     ctx.capabilities.drive.capable = true;
     ctx.capabilities.drive.available = true;
@@ -88,12 +88,12 @@ void test_autonomy_not_permitted(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionKind::NO_ACTION), static_cast<uint8_t>(decision.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CognitiveDecisionReason::SAFETY_BLOCKED), static_cast<uint8_t>(decision.reason));
-    TEST_ASSERT_EQUAL_UINT32(106, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("106", decision.intentId);
 }
 
 void test_safe_intent(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 107;
+    strcpy(ctx.intentId, "107");
     ctx.snapshot.safety.bootComplete = true;
     ctx.snapshot.safety.estopped = false;
     ctx.snapshot.safety.faulted = false;
@@ -111,13 +111,13 @@ void test_safe_intent(void) {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentKind::MOVE), static_cast<uint8_t>(decision.intent.kind));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DriveMode::FORWARD), static_cast<uint8_t>(decision.intent.driveMode));
     TEST_ASSERT_EQUAL_UINT32(250, decision.intent.durationMs);
-    TEST_ASSERT_EQUAL_UINT32(107, decision.correlationId);
-    TEST_ASSERT_EQUAL_UINT32(107, decision.intent.correlationId);
+    TEST_ASSERT_EQUAL_STRING("107", decision.intentId);
+    TEST_ASSERT_EQUAL_STRING("107", decision.intent.intentId);
 }
 
 void test_correlation_id(void) {
     CognitiveContext ctx;
-    ctx.correlationId = 12345;
+    strcpy(ctx.intentId, "12345");
     
     // Trigger any rule, e.g. ESTOP to see correlation ID
     ctx.snapshot.safety.estopped = true;
@@ -125,7 +125,7 @@ void test_correlation_id(void) {
     RuleReasoningProvider provider;
     CognitiveDecision decision = provider.reason(ctx);
 
-    TEST_ASSERT_EQUAL_UINT32(12345, decision.correlationId);
+    TEST_ASSERT_EQUAL_STRING("12345", decision.intentId);
     
     // For INTENT check inner id too:
     ctx.snapshot.safety.estopped = false;
@@ -138,8 +138,8 @@ void test_correlation_id(void) {
     ctx.snapshot.safety.autonomyMotionAllowed = true;
     
     CognitiveDecision decision2 = provider.reason(ctx);
-    TEST_ASSERT_EQUAL_UINT32(12345, decision2.correlationId);
-    TEST_ASSERT_EQUAL_UINT32(12345, decision2.intent.correlationId);
+    TEST_ASSERT_EQUAL_STRING("12345", decision2.intentId);
+    TEST_ASSERT_EQUAL_STRING("12345", decision2.intent.intentId);
 }
 
 int main(int argc, char **argv) {

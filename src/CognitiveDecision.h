@@ -6,15 +6,15 @@ struct CognitiveDecision {
     CognitiveDecisionKind kind = CognitiveDecisionKind::NONE;
     RobotIntent intent;
     CognitiveDecisionReason reason = CognitiveDecisionReason::NONE;
-    uint32_t correlationId = 0;
+    char intentId[37] = {0};
 };
 
 CognitiveDecision makeNoAction(
     CognitiveDecisionReason reason,
-    uint32_t correlationId
+    const char* intentId
 );
 
 CognitiveDecision makeIntent(
     const RobotIntent& intent,
-    uint32_t correlationId
+    const char* intentId
 );
