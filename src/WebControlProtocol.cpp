@@ -202,7 +202,7 @@ bool WebControlProtocol::parseCommand(
         const char* c = doc["code"].as<const char*>();
         size_t dIdx = 0;
         for (size_t i = 0; c[i] != '\0'; i++) {
-          if (isdigit(c[i])) {
+          if (c[i] >= '0' && c[i] <= '9') {
             if (dIdx >= WIFI_PAIRING_DIGITS) {
               error = WebProtocolError::INVALID_ARGUMENT;
               return false;
