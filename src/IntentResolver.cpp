@@ -9,7 +9,6 @@ IntentResult IntentResolver::resolve(
     res.reason = CapabilityReason::NONE;
     strncpy(res.intentId, intent.intentId, sizeof(res.intentId) - 1);
     res.intentId[sizeof(res.intentId) - 1] = '\0';
-    res.result = IntentResolution::ACCEPTED;
 
     strncpy(res.command.intentId, intent.intentId, sizeof(res.command.intentId) - 1);
     res.command.intentId[sizeof(res.command.intentId) - 1] = '\0';

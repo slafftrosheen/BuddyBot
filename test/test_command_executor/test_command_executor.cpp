@@ -16,11 +16,17 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
     return s_routerExecuteResult;
 }
 
+static SafetyFault s_routerSafetyFault = SafetyFault::NONE;
+SafetyFault ControlRouter::safetyFault() const {
+    return s_routerSafetyFault;
+}
+
 // ControlRouter has other methods in its header. If they are not called, they don't need definitions here.
 
 void setUp(void) {
     s_routerExecuteCalled = false;
     s_routerExecuteResult = true;
+    s_routerSafetyFault = SafetyFault::NONE;
     s_lastCommand = RobotCommand{};
 }
 
@@ -37,7 +43,7 @@ void test_executor_valid_command_forwarded(void) {
 
     ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::ACCEPTED), static_cast<uint8_t>(result.status));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::SUCCEEDED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::STOP), static_cast<uint8_t>(s_lastCommand.kind));
     TEST_ASSERT_EQUAL_STRING("1234", s_lastCommand.intentId);
@@ -83,7 +89,7 @@ void test_executor_field_preservation(void) {
 
     ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::ACCEPTED), static_cast<uint8_t>(result.status));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::SUCCEEDED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
     
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::MOVE), static_cast<uint8_t>(s_lastCommand.kind));
@@ -118,6 +124,7 @@ void test_executor_router_rejection(void) {
     CommandExecutor executor(&router);
 
     s_routerExecuteResult = false; // Simulate router rejection
+    s_routerSafetyFault = SafetyFault::NONE;
 
     RobotCommand cmd;
     cmd.kind = CommandKind::STOP;
@@ -125,7 +132,24 @@ void test_executor_router_rejection(void) {
 
     ExecutionResult result = executor.execute(cmd, cmd.intentId);
 
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::REJECTED), static_cast<uint8_t>(result.status));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::FAILED), static_cast<uint8_t>(result.status));
+    TEST_ASSERT_TRUE(s_routerExecuteCalled);
+}
+
+void test_executor_safety_denial(void) {
+    ControlRouter router;
+    CommandExecutor executor(&router);
+
+    s_routerExecuteResult = false; // Simulate router rejection
+    s_routerSafetyFault = SafetyFault::PHYSICAL_ESTOP; // Simulating safety fault
+
+    RobotCommand cmd;
+    cmd.kind = CommandKind::STOP;
+    cmd.source = ControlSource::HALO;
+
+    ExecutionResult result = executor.execute(cmd, cmd.intentId);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ExecutionStatus::DENIED), static_cast<uint8_t>(result.status));
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
 }
 
@@ -161,6 +185,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_executor_field_preservation);
     RUN_TEST(test_executor_command_immutability);
     RUN_TEST(test_executor_router_rejection);
+    RUN_TEST(test_executor_safety_denial);
     RUN_TEST(test_executor_rejects_non_halo_source);
     return UNITY_END();
 }

@@ -58,7 +58,7 @@ void test_make_intent(void) {
     TEST_ASSERT_EQUAL_STRING("777", decision.intent.intentId);
 }
 
-void test_correlation_propagation(void) {
+void test_intent_id_propagation(void) {
     RobotIntent intent;
     intent.kind = IntentKind::ACTION;
     strcpy(intent.intentId, "1234"); // input intent has some ID
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_context_copies_capabilities);
     RUN_TEST(test_make_no_action);
     RUN_TEST(test_make_intent);
-    RUN_TEST(test_correlation_propagation);
+    RUN_TEST(test_intent_id_propagation);
     RUN_TEST(test_safety_state_remains_data_only);
     RUN_TEST(test_capability_state_remains_data_only);
     return UNITY_END();

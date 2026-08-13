@@ -256,7 +256,7 @@ void test_intent_resolver_accessory_not_capable(void) {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CapabilityReason::NOT_IMPLEMENTED), static_cast<uint8_t>(res.reason));
 }
 
-void test_intent_resolver_correlation_id(void) {
+void test_intent_resolver_intent_id(void) {
     RuntimeCapabilities caps;
     caps.drive.capable = true;
     caps.drive.available = true;
@@ -287,7 +287,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_intent_resolver_accessory_accepted);
     RUN_TEST(test_intent_resolver_accessory_not_permitted);
     RUN_TEST(test_intent_resolver_accessory_not_capable);
-    RUN_TEST(test_intent_resolver_correlation_id);
+    RUN_TEST(test_intent_resolver_intent_id);
     return UNITY_END();
 }
 

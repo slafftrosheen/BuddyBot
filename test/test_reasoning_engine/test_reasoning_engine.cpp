@@ -66,7 +66,7 @@ void test_invalid_none_intent(void) {
     FixedDecisionProvider provider;
     RobotIntent intent;
     intent.kind = IntentKind::NONE;
-    provider.nextDecision = makeIntent(intent, "555"); // correlation IDs match
+    provider.nextDecision = makeIntent(intent, "555"); // intent IDs match
 
     ReasoningEngine engine(&provider);
     CognitiveContext ctx;
@@ -77,12 +77,12 @@ void test_invalid_none_intent(void) {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ReasoningResult::INVALID_DECISION), static_cast<uint8_t>(res));
 }
 
-void test_correlation_mismatch(void) {
+void test_intent_id_mismatch(void) {
     FixedDecisionProvider provider;
     RobotIntent intent;
     intent.kind = IntentKind::MOVE;
     provider.nextDecision = makeIntent(intent, "100");
-    // Break the correlation
+    // Break the intent ID
     strcpy(provider.nextDecision.intent.intentId, "200");
 
     ReasoningEngine engine(&provider);
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_no_action);
     RUN_TEST(test_valid_intent);
     RUN_TEST(test_invalid_none_intent);
-    RUN_TEST(test_correlation_mismatch);
+    RUN_TEST(test_intent_id_mismatch);
     RUN_TEST(test_provider_preserves_context);
     RUN_TEST(test_provider_error);
     return UNITY_END();

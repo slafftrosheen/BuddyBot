@@ -115,7 +115,7 @@ void test_safe_intent(void) {
     TEST_ASSERT_EQUAL_STRING("107", decision.intent.intentId);
 }
 
-void test_correlation_id(void) {
+void test_intent_id(void) {
     CognitiveContext ctx;
     strcpy(ctx.intentId, "12345");
     
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_autonomy_disabled);
     RUN_TEST(test_autonomy_not_permitted);
     RUN_TEST(test_safe_intent);
-    RUN_TEST(test_correlation_id);
+    RUN_TEST(test_intent_id);
     return UNITY_END();
 }
 
