@@ -33,7 +33,7 @@ void test_executor_valid_command_forwarded(void) {
     RobotCommand cmd;
     cmd.kind = CommandKind::STOP;
     cmd.correlationId = 1234;
-    cmd.source = ControlSource::AUTONOMY;
+    cmd.source = ControlSource::HALO;
 
     bool result = executor.execute(cmd);
 
@@ -41,7 +41,7 @@ void test_executor_valid_command_forwarded(void) {
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::STOP), static_cast<uint8_t>(s_lastCommand.kind));
     TEST_ASSERT_EQUAL_UINT32(1234, s_lastCommand.correlationId);
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::AUTONOMY), static_cast<uint8_t>(s_lastCommand.source));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(s_lastCommand.source));
 }
 
 void test_executor_rejects_none(void) {
@@ -62,6 +62,7 @@ void test_executor_null_router(void) {
 
     RobotCommand cmd;
     cmd.kind = CommandKind::STOP;
+    cmd.source = ControlSource::HALO;
 
     bool result = executor.execute(cmd);
 
@@ -78,7 +79,7 @@ void test_executor_field_preservation(void) {
     cmd.driveMode = DriveMode::FORWARD;
     cmd.durationMs = 500;
     cmd.correlationId = 9876;
-    cmd.source = ControlSource::AUTONOMY;
+    cmd.source = ControlSource::HALO;
 
     bool result = executor.execute(cmd);
 
@@ -89,7 +90,7 @@ void test_executor_field_preservation(void) {
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DriveMode::FORWARD), static_cast<uint8_t>(s_lastCommand.driveMode));
     TEST_ASSERT_EQUAL_UINT16(500, s_lastCommand.durationMs);
     TEST_ASSERT_EQUAL_UINT32(9876, s_lastCommand.correlationId);
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::AUTONOMY), static_cast<uint8_t>(s_lastCommand.source));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(s_lastCommand.source));
 }
 
 void test_executor_command_immutability(void) {
@@ -100,6 +101,7 @@ void test_executor_command_immutability(void) {
     original.kind = CommandKind::MOVE;
     original.driveMode = DriveMode::FORWARD;
     original.durationMs = 500;
+    original.source = ControlSource::HALO;
 
     RobotCommand copy = original;
 
@@ -119,11 +121,36 @@ void test_executor_router_rejection(void) {
 
     RobotCommand cmd;
     cmd.kind = CommandKind::STOP;
+    cmd.source = ControlSource::HALO;
 
     bool result = executor.execute(cmd);
 
     TEST_ASSERT_FALSE(result);
     TEST_ASSERT_TRUE(s_routerExecuteCalled);
+}
+
+void test_executor_rejects_non_halo_source(void) {
+    ControlRouter router;
+    CommandExecutor executor(&router);
+
+    RobotCommand cmd;
+    cmd.kind = CommandKind::MOVE;
+    cmd.source = ControlSource::WIFI;
+
+    bool result = executor.execute(cmd);
+
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_FALSE(s_routerExecuteCalled);
+
+    cmd.source = ControlSource::SERIAL_CTRL;
+    result = executor.execute(cmd);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_FALSE(s_routerExecuteCalled);
+
+    cmd.source = ControlSource::AUTONOMY;
+    result = executor.execute(cmd);
+    TEST_ASSERT_FALSE(result);
+    TEST_ASSERT_FALSE(s_routerExecuteCalled);
 }
 
 int main(int argc, char **argv) {
@@ -134,6 +161,7 @@ int main(int argc, char **argv) {
     RUN_TEST(test_executor_field_preservation);
     RUN_TEST(test_executor_command_immutability);
     RUN_TEST(test_executor_router_rejection);
+    RUN_TEST(test_executor_rejects_non_halo_source);
     return UNITY_END();
 }
 

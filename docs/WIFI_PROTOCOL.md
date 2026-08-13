@@ -68,7 +68,7 @@ The robot continuously broadcasts telemetry via WebSocket to all connected clien
 }
 ```
 
-Telemetry also includes `protocolVersion`, `configSchemaVersion`, `hardwareManifestVersion`, and `safetyPolicyVersion` so a companion controller can reject incompatible firmware. When the built-in BMI270 is available, telemetry includes `imuAvailable`, `imuValid`, `imuSampleTimeMs`, `accelG` (`x`, `y`, `z` in g), and `gyroDps` (`x`, `y`, `z` in degrees per second). Autonomous behavior is denied on unhealthy IMU data.
+Telemetry also includes `protocolVersion`, `configSchemaVersion`, `hardwareManifestVersion`, and `safetyPolicyVersion` so a Halo Cognitive Runtime client can reject incompatible firmware. When the built-in BMI270 is available, telemetry includes `imuAvailable`, `imuValid`, `imuSampleTimeMs`, `accelG` (`x`, `y`, `z` in g), and `gyroDps` (`x`, `y`, `z` in degrees per second). Autonomous behavior is denied on unhealthy IMU data.
 
 ## Session Liveness and Limits
 

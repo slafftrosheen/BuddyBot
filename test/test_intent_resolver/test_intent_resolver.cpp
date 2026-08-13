@@ -23,6 +23,7 @@ void test_intent_resolver_move_accepted(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::MOVE), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
     TEST_ASSERT_EQUAL_UINT32(12345, res.correlationId);
 }
 
@@ -105,6 +106,7 @@ void test_intent_resolver_stop_always_accepted(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::STOP), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
 }
 
 void test_intent_resolver_disarm_always_accepted(void) {
@@ -120,6 +122,40 @@ void test_intent_resolver_disarm_always_accepted(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::DISARM), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
+}
+
+void test_intent_resolver_arm_accepted(void) {
+    RuntimeCapabilities caps;
+    caps.drive.capable = true;
+    caps.drive.available = true;
+    caps.drive.permitted = true;
+
+    RobotIntent intent;
+    intent.kind = IntentKind::ARM;
+
+    IntentResult res = resolver.resolve(intent, caps);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::ARM), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
+}
+
+void test_intent_resolver_action_accepted(void) {
+    RuntimeCapabilities caps;
+    caps.actions.capable = true;
+    caps.actions.available = true;
+    caps.actions.permitted = true;
+
+    RobotIntent intent;
+    intent.kind = IntentKind::ACTION;
+    intent.action = ActionId::WAVE;
+
+    IntentResult res = resolver.resolve(intent, caps);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::ACTION), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
 }
 
 void test_intent_resolver_action_not_capable(void) {
@@ -134,6 +170,57 @@ void test_intent_resolver_action_not_capable(void) {
 
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::CAPABILITY_UNAVAILABLE), static_cast<uint8_t>(res.result));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CapabilityReason::NOT_IMPLEMENTED), static_cast<uint8_t>(res.reason));
+}
+
+void test_intent_resolver_set_mood_accepted(void) {
+    RuntimeCapabilities caps;
+    caps.actions.capable = true;
+    caps.actions.available = true;
+    caps.actions.permitted = true;
+
+    RobotIntent intent;
+    intent.kind = IntentKind::SET_MOOD;
+    intent.mood = Mood::HAPPY;
+
+    IntentResult res = resolver.resolve(intent, caps);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::SET_MOOD), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
+}
+
+void test_intent_resolver_next_persona_accepted(void) {
+    RuntimeCapabilities caps;
+    caps.actions.capable = true;
+    caps.actions.available = true;
+    caps.actions.permitted = true;
+
+    RobotIntent intent;
+    intent.kind = IntentKind::NEXT_PERSONA;
+
+    IntentResult res = resolver.resolve(intent, caps);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::NEXT_PERSONA), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
+}
+
+void test_intent_resolver_accessory_accepted(void) {
+    RuntimeCapabilities caps;
+    caps.manipulators.capable = true;
+    caps.manipulators.available = true;
+    caps.manipulators.permitted = true;
+
+    RobotIntent intent;
+    intent.kind = IntentKind::ACCESSORY;
+    intent.accessoryIndex = 1;
+    intent.accessoryActive = true;
+
+    IntentResult res = resolver.resolve(intent, caps);
+
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::ACCESSORY), static_cast<uint8_t>(res.command.kind));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
 }
 
 void test_intent_resolver_accessory_not_permitted(void) {
@@ -192,7 +279,12 @@ int main(int argc, char **argv) {
     RUN_TEST(test_intent_resolver_move_invalid_parameter);
     RUN_TEST(test_intent_resolver_stop_always_accepted);
     RUN_TEST(test_intent_resolver_disarm_always_accepted);
+    RUN_TEST(test_intent_resolver_arm_accepted);
+    RUN_TEST(test_intent_resolver_action_accepted);
     RUN_TEST(test_intent_resolver_action_not_capable);
+    RUN_TEST(test_intent_resolver_set_mood_accepted);
+    RUN_TEST(test_intent_resolver_next_persona_accepted);
+    RUN_TEST(test_intent_resolver_accessory_accepted);
     RUN_TEST(test_intent_resolver_accessory_not_permitted);
     RUN_TEST(test_intent_resolver_accessory_not_capable);
     RUN_TEST(test_intent_resolver_correlation_id);

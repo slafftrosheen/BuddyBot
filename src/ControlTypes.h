@@ -8,7 +8,8 @@ enum class ControlSource : uint8_t {
   BLE,
   LOCAL_UI,
   AUTONOMY,
-  EXPRESSION
+  EXPRESSION,
+  HALO // High-level intent originating from the Halo Cognitive Runtime.
 };
 
 enum class CommandKind : uint8_t {

@@ -12,5 +12,8 @@ bool CommandExecutor::execute(const RobotCommand& command) {
     if (command.kind == CommandKind::NONE) {
         return false;
     }
+    if (command.source != ControlSource::HALO) {
+        return false;
+    }
     return _router->execute(command);
 }

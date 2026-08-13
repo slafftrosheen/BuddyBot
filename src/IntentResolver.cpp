@@ -9,7 +9,7 @@ IntentResult IntentResolver::resolve(
     res.reason = CapabilityReason::NONE;
     res.correlationId = intent.correlationId;
     res.command.kind = CommandKind::NONE;
-    res.command.source = ControlSource::AUTONOMY;
+    res.command.source = ControlSource::HALO;
     res.command.correlationId = intent.correlationId;
 
     switch (intent.kind) {

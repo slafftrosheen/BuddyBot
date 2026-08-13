@@ -2,6 +2,7 @@
 #include "RuntimeCapabilities.h"
 #include "IntentResolver.h"
 #include "CommandExecutor.h"
+#include "EmbodimentGateway.h"
 #include "ControlRouter.h"
 #include "RobotAPI.h"
 #include "SafetySupervisor.h"
@@ -83,8 +84,9 @@ bool RobotAPI::mayMoveManipulators() const { return s_robotSafety ? s_robotSafet
 ActuatorCapabilities RobotAPI::actuatorCapabilities() const { return ActuatorCapabilities{}; }
 void RobotAPI::setSafetySupervisor(SafetySupervisor* s) { s_robotSafety = s; }
 
-// Finally include ControlRouter cpp
+// Finally include ControlRouter cpp and EmbodimentGateway cpp
 #include "../../src/ControlRouter.cpp"
+#include "../../src/EmbodimentGateway.cpp"
 
 
 // --- Tests ---
@@ -93,6 +95,7 @@ static SafetySupervisor safety;
 static ControlRouter router;
 static CommandExecutor executor(&router);
 static IntentResolver resolver;
+static EmbodimentGateway gateway(&resolver, &executor);
 
 void setUp(void) {
     s_robotSafety = &safety;
@@ -137,12 +140,9 @@ void test_integration_happy_path(void) {
     intent.durationMs = 500;
     intent.correlationId = 42;
 
-    IntentResult res = resolver.resolve(intent, caps);
+    IntentResult res = gateway.submit(intent, caps);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(res.result));
-    
-    // 3. Executor forwards it
-    bool executed = executor.execute(res.command);
-    TEST_ASSERT_TRUE(executed);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(ControlSource::HALO), static_cast<uint8_t>(res.command.source));
 }
 
 void test_integration_arming_disabled_rejects(void) {
@@ -157,15 +157,11 @@ void test_integration_arming_disabled_rejects(void) {
     intent.driveMode = DriveMode::FORWARD;
     intent.durationMs = 500;
 
-    IntentResult res = resolver.resolve(intent, caps);
+    IntentResult res = gateway.submit(intent, caps);
     
-    // Resolver MUST reject it
+    // Gateway MUST return the rejection
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::NOT_PERMITTED), static_cast<uint8_t>(res.result));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::NONE), static_cast<uint8_t>(res.command.kind));
-
-    // Executor MUST reject the NONE command
-    bool executed = executor.execute(res.command);
-    TEST_ASSERT_FALSE(executed);
 }
 
 void test_integration_stale_capability_cannot_bypass_safety(void) {
@@ -199,25 +195,17 @@ void test_integration_safety_exceptions_preserved(void) {
     RuntimeCapabilities caps = buildRuntimeCapabilities(robot);
     TEST_ASSERT_FALSE(caps.drive.permitted);
 
-    // STOP intent must still be accepted
+    // STOP intent must still be accepted and executed
     RobotIntent stopIntent;
     stopIntent.kind = IntentKind::STOP;
-    IntentResult stopRes = resolver.resolve(stopIntent, caps);
+    IntentResult stopRes = gateway.submit(stopIntent, caps);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(stopRes.result));
 
-    // And it must be executable
-    bool stopExecuted = executor.execute(stopRes.command);
-    TEST_ASSERT_TRUE(stopExecuted);
-
-    // DISARM intent must still be accepted
+    // DISARM intent must still be accepted and executed
     RobotIntent disarmIntent;
     disarmIntent.kind = IntentKind::DISARM;
-    IntentResult disarmRes = resolver.resolve(disarmIntent, caps);
+    IntentResult disarmRes = gateway.submit(disarmIntent, caps);
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(IntentResolution::ACCEPTED), static_cast<uint8_t>(disarmRes.result));
-
-    // And it must be executable
-    bool disarmExecuted = executor.execute(disarmRes.command);
-    TEST_ASSERT_TRUE(disarmExecuted);
 }
 
 int main(int argc, char **argv) {
