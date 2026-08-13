@@ -15,7 +15,7 @@ void test_context_copies_snapshot(void) {
     
     RuntimeCapabilities caps;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
     
     TEST_ASSERT_EQUAL_UINT32(12345, ctx.snapshot.capturedAtMs);
     TEST_ASSERT_TRUE(ctx.snapshot.safety.armed);
@@ -29,7 +29,7 @@ void test_context_copies_capabilities(void) {
     caps.drive.permitted = true;
     caps.drive.reason = CapabilityReason::SAFETY_FAULT;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
     
     TEST_ASSERT_TRUE(ctx.capabilities.drive.capable);
     TEST_ASSERT_FALSE(ctx.capabilities.drive.available);
@@ -75,7 +75,7 @@ void test_safety_state_remains_data_only(void) {
     snap.safety.state = 2; // Arbitrary state constant for ESTOP
     RuntimeCapabilities caps;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
     
     TEST_ASSERT_EQUAL_UINT8(2, static_cast<uint8_t>(ctx.snapshot.safety.state));
     // No mutation of SafetySupervisor because it's not even included!
@@ -89,7 +89,7 @@ void test_capability_state_remains_data_only(void) {
     caps.drive.permitted = false;
     caps.drive.reason = CapabilityReason::MOTOR_ARMING_DISABLED;
     
-    CognitiveContext ctx = buildCognitiveContext(snap, caps);
+    CognitiveContext ctx = buildCognitiveContext(snap, caps, 12345);
     
     TEST_ASSERT_TRUE(ctx.capabilities.drive.capable);
     TEST_ASSERT_TRUE(ctx.capabilities.drive.available);
