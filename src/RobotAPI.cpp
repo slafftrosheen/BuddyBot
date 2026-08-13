@@ -548,9 +548,19 @@ SafetyFault RobotAPI::safetyFault() const {
 }
 
 uint32_t RobotAPI::safetyStateChangedAtMs() const {
-  return _safetySupervisor ? _safetySupervisor->stateChangedAtMs() : 0;
+  if (!_safetySupervisor) return 0;
+  return _safetySupervisor->stateChangedAtMs();
 }
 
+bool RobotAPI::mayEnableDrive() const {
+  if (!_safetySupervisor) return false;
+  return _safetySupervisor->mayEnableDrive();
+}
+
+bool RobotAPI::mayMoveManipulators() const {
+  if (!_safetySupervisor) return false;
+  return _safetySupervisor->mayMoveManipulators();
+}
 
 ServoDiagnostics* RobotAPI::diagnostics() {
   return &_diagnostics;
