@@ -12,11 +12,7 @@ bool SonicRangeSensor::begin() {
   _health = RangeSensorHealth::UNINITIALIZED;
   
   // Initialize the sensor via the existing Wire bus.
-<<<<<<< HEAD
-  _sensor.begin(&Wire1, 9, 10, SONIC_I2C_ADDR);
-=======
-  _sensor.begin(&Wire, I2C_SDA_PIN, I2C_SCL_PIN, SONIC_I2C_ADDR);
->>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279
+  _sensor.begin(&Wire1, I2C_SDA_PIN, I2C_SCL_PIN, SONIC_I2C_ADDR);
 
   // Verify connection by doing a simple I2C probe
   Wire1.beginTransmission(SONIC_I2C_ADDR);

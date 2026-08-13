@@ -5,6 +5,7 @@
 #include "ControlTypes.h"
 #include "NetworkTypes.h"
 #include "EventLog.h"
+#include "RuntimeSnapshot.h"
 
 enum class WebMessageType : uint8_t {
   INVALID,
@@ -19,7 +20,8 @@ enum class WebMessageType : uint8_t {
   ACTION,
   MOOD,
   PERSONA_NEXT,
-  ACCESSORY
+  ACCESSORY,
+  STATE
 };
 
 enum class WebProtocolError : uint8_t {
@@ -72,6 +74,7 @@ public:
   String generateError(uint32_t msgId, const String& code);
   String generateTelemetry(const RobotTelemetry& t);
   String generateEventLog(const EventLogEntry* entries, size_t count);
+  String generateRuntimeSnapshot(uint32_t requestId, const RuntimeSnapshot& snapshot);
 
 private:
   DriveMode parseDriveMode(const char* modeStr);

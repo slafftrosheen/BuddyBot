@@ -2,11 +2,11 @@
 #include <Arduino.h>
 
 struct EventLogEntry {
-  uint32_t timestampMs = 0;
-  const char* severity = "INFO";
-  const char* code = "unknown";
-  const char* component = "system";
-  uint32_t correlationId = 0;
+  uint32_t timestampMs;
+  const char* severity;
+  const char* code;
+  const char* component;
+  uint32_t correlationId;
 };
 
 class EventLog {

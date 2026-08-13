@@ -504,11 +504,6 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   }
   portEXIT_CRITICAL(&_stateMux);
 
-<<<<<<< HEAD
-  if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::PING || msg.type == WebMessageType::STATUS) {
-    if (_session.active && _session.clientId == clientId) {
-      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
-=======
   if (!knownClient) {
     return;
   }
@@ -531,10 +526,15 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       }
 
       refreshControllerLease(clientId, sessionGeneration, now);
->>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279
     }
     _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     sendEvents(clientId);
+    return;
+  }
+
+  if (msg.type == WebMessageType::STATE) {
+    RuntimeSnapshot snapshot = _robot->runtimeSnapshot();
+    _ws->text(clientId, _protocol.generateRuntimeSnapshot(msg.requestId, snapshot));
     return;
   }
 

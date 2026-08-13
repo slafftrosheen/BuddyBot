@@ -81,8 +81,8 @@ bool RobotHal::begin(const RobotBuildConfig& config) {
       return false;
     }
     
-    _rollerBus1 = std::unique_ptr<RollerBus>(new RollerBus(Wire, ROLLER1_ADDR));
-    _rollerBus2 = std::unique_ptr<RollerBus>(new RollerBus(Wire, ROLLER2_ADDR));
+    _rollerBus1 = std::unique_ptr<RollerBus>(new RollerBus(Wire1, ROLLER1_ADDR));
+    _rollerBus2 = std::unique_ptr<RollerBus>(new RollerBus(Wire1, ROLLER2_ADDR));
     _rollerDrive = std::unique_ptr<RollerDrive>(new RollerDrive(_rollerBus1.get(), _rollerBus2.get()));
 
     if (!_rollerDrive->begin()) {

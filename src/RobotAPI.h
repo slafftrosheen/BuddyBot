@@ -85,6 +85,8 @@ public:
   SafetyState safetyState() const;
   SafetyFault safetyFault() const;
   uint32_t safetyStateChangedAtMs() const;
+  bool mayEnableDrive() const;
+  bool mayMoveManipulators() const;
 
   ServoDiagnostics* diagnostics();
 

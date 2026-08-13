@@ -70,15 +70,11 @@ constexpr bool ENABLE_AUTONOMY_AT_BOOT = false;
 constexpr bool ENABLE_CAUTIOUS_ROAM = false;
 
 constexpr bool ENABLE_OBSTACLE_SAFETY = true;
-<<<<<<< HEAD
-constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = false;
-=======
 constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = true;
 constexpr uint16_t SAFETY_MANUAL_OVERRIDE_MS = 600;
 constexpr uint16_t PHYSICAL_ESTOP_HOLD_MS = 1200;
 constexpr uint16_t PHYSICAL_ESTOP_RESET_HOLD_MS = 2500;
 constexpr uint16_t SYSTEM_TASK_WATCHDOG_TIMEOUT_MS = 3000;
->>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279
 
 static_assert(!ALLOW_MOTOR_ARMING || ENABLE_OBSTACLE_SAFETY, "Motor arming should not be enabled without obstacle safety");
 static_assert(!ENABLE_CAUTIOUS_ROAM || ALLOW_MOTOR_ARMING, "Cautious roam requires motor arming");

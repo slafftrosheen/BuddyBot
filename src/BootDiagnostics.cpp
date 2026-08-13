@@ -36,16 +36,11 @@ void BootDiagnostics::update() {
       Wire1.beginTransmission(0x25);
       if (Wire1.endTransmission() == 0) foundServo = true;
       
-<<<<<<< HEAD
       Wire1.beginTransmission(0x57);
       if (Wire1.endTransmission() == 0) foundSonic = true;
-=======
-      Wire.beginTransmission(0x57);
-      if (Wire.endTransmission() == 0) foundSonic = true;
 
       _status.servoBusPresent = foundServo;
       _status.sonicPresent = foundSonic;
->>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279
       
       Serial.printf("BOOT: I2C Scan - Servo8: %s, Sonic: %s\n", foundServo ? "OK" : "MISSING", foundSonic ? "OK" : "MISSING");
       

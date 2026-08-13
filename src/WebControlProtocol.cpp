@@ -63,6 +63,7 @@ const char* WebControlProtocol::webMessageTypeName(WebMessageType type) const {
     case WebMessageType::MOOD: return "mood";
     case WebMessageType::PERSONA_NEXT: return "persona_next";
     case WebMessageType::ACCESSORY: return "accessory";
+    case WebMessageType::STATE: return "state";
     default: return "unknown";
   }
 }
@@ -140,6 +141,7 @@ bool WebControlProtocol::parseCommand(
   else if (strcmp(typeStr, "mood") == 0) out.type = WebMessageType::MOOD;
   else if (strcmp(typeStr, "persona_next") == 0) out.type = WebMessageType::PERSONA_NEXT;
   else if (strcmp(typeStr, "accessory") == 0) out.type = WebMessageType::ACCESSORY;
+  else if (strcmp(typeStr, "state") == 0) out.type = WebMessageType::STATE;
   else {
     error = WebProtocolError::UNKNOWN_TYPE;
     return false;
@@ -162,6 +164,7 @@ bool WebControlProtocol::parseCommand(
     case WebMessageType::ARM:
     case WebMessageType::DISARM:
     case WebMessageType::PERSONA_NEXT:
+    case WebMessageType::STATE:
       validSchema = hasOnlyFields(object, queryFields, sizeof(queryFields) / sizeof(queryFields[0]));
       break;
     case WebMessageType::PAIR:
@@ -191,6 +194,7 @@ bool WebControlProtocol::parseCommand(
     case WebMessageType::HELLO:
     case WebMessageType::PING:
     case WebMessageType::STATUS:
+    case WebMessageType::STATE:
       return true;
 
     case WebMessageType::PAIR: {
@@ -452,6 +456,74 @@ String WebControlProtocol::generateEventLog(const EventLogEntry* entries, size_t
       obj["correlationId"] = entries[i].correlationId;
     }
   }
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+String WebControlProtocol::generateRuntimeSnapshot(uint32_t requestId, const RuntimeSnapshot& snapshot) {
+  JsonDocument doc;
+  doc["v"] = CONTROL_PROTOCOL_VERSION;
+  if (requestId != 0) doc["id"] = requestId;
+  doc["type"] = "state";
+  doc["ok"] = true;
+
+  JsonObject stateObj = doc["state"].to<JsonObject>();
+  stateObj["capturedAtMs"] = snapshot.capturedAtMs;
+
+  JsonObject safetyObj = stateObj["safety"].to<JsonObject>();
+  safetyObj["state"] = snapshot.safety.state;
+  safetyObj["fault"] = snapshot.safety.fault;
+  safetyObj["bootComplete"] = snapshot.safety.bootComplete;
+  safetyObj["armed"] = snapshot.safety.armed;
+  safetyObj["estopped"] = snapshot.safety.estopped;
+  safetyObj["faulted"] = snapshot.safety.faulted;
+  safetyObj["autonomyEnabled"] = snapshot.safety.autonomyEnabled;
+  safetyObj["autonomyMotionAllowed"] = snapshot.safety.autonomyMotionAllowed;
+  safetyObj["stateChangedAtMs"] = snapshot.safety.stateChangedAtMs;
+  safetyObj["manualOverrideUntilMs"] = snapshot.safety.manualOverrideUntilMs;
+
+  JsonObject driveObj = stateObj["drive"].to<JsonObject>();
+  driveObj["available"] = snapshot.drive.available;
+  driveObj["active"] = snapshot.drive.active;
+  driveObj["forward"] = snapshot.drive.forward;
+  driveObj["blocked"] = snapshot.drive.blocked;
+  driveObj["mode"] = snapshot.drive.mode;
+  driveObj["lastCommandAtMs"] = snapshot.drive.lastCommandAtMs;
+
+  JsonObject rangeObj = stateObj["range"].to<JsonObject>();
+  rangeObj["available"] = snapshot.range.available;
+  rangeObj["valid"] = snapshot.range.valid;
+  rangeObj["distanceMm"] = snapshot.range.distanceMm;
+  rangeObj["health"] = snapshot.range.health;
+  rangeObj["sampleTimeMs"] = snapshot.range.sampleTimeMs;
+  rangeObj["consecutiveInvalid"] = snapshot.range.consecutiveInvalid;
+
+  JsonObject imuObj = stateObj["imu"].to<JsonObject>();
+  imuObj["available"] = snapshot.imu.available;
+  imuObj["valid"] = snapshot.imu.valid;
+  imuObj["sampleTimeMs"] = snapshot.imu.sampleTimeMs;
+  imuObj["accelXG"] = snapshot.imu.accelXG;
+  imuObj["accelYG"] = snapshot.imu.accelYG;
+  imuObj["accelZG"] = snapshot.imu.accelZG;
+  imuObj["gyroXDps"] = snapshot.imu.gyroXDps;
+  imuObj["gyroYDps"] = snapshot.imu.gyroYDps;
+  imuObj["gyroZDps"] = snapshot.imu.gyroZDps;
+
+  JsonObject behaviorObj = stateObj["behavior"].to<JsonObject>();
+  behaviorObj["actionRunning"] = snapshot.behavior.actionRunning;
+  behaviorObj["action"] = snapshot.behavior.action;
+  behaviorObj["mood"] = snapshot.behavior.mood;
+  behaviorObj["persona"] = snapshot.behavior.persona;
+  behaviorObj["autonomyEnabled"] = snapshot.behavior.autonomyEnabled;
+
+  JsonObject hardwareObj = stateObj["hardware"].to<JsonObject>();
+  hardwareObj["driveAvailable"] = snapshot.hardware.driveAvailable;
+  hardwareObj["rangeAvailable"] = snapshot.hardware.rangeAvailable;
+  hardwareObj["imuAvailable"] = snapshot.hardware.imuAvailable;
+  hardwareObj["servoBusPresent"] = snapshot.hardware.servoBusPresent;
+  hardwareObj["sonicPresent"] = snapshot.hardware.sonicPresent;
+
   String out;
   serializeJson(doc, out);
   return out;
