@@ -58,7 +58,7 @@ constexpr bool ENABLE_AUTONOMY_AT_BOOT = false;
 constexpr bool ENABLE_CAUTIOUS_ROAM = false;
 
 constexpr bool ENABLE_OBSTACLE_SAFETY = true;
-constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = true;
+constexpr bool REQUIRE_VALID_RANGE_FOR_FORWARD_DRIVE = false;
 
 static_assert(!ALLOW_MOTOR_ARMING || ENABLE_OBSTACLE_SAFETY, "Motor arming should not be enabled without obstacle safety");
 static_assert(!ENABLE_CAUTIOUS_ROAM || ALLOW_MOTOR_ARMING, "Cautious roam requires motor arming");

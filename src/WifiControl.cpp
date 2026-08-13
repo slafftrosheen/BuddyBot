@@ -274,6 +274,9 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   }
 
   if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::PING || msg.type == WebMessageType::STATUS) {
+    if (_session.active && _session.clientId == clientId) {
+      _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
+    }
     _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     sendEvents(clientId);
     return;

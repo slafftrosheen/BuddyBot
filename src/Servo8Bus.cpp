@@ -1,7 +1,7 @@
 #include "Servo8Bus.h"
 
 bool Servo8Bus::begin() {
-  _connected = _unit.begin(&Wire, I2C_SDA_PIN, I2C_SCL_PIN, SERVOS8_ADDR);
+  _connected = _unit.begin(&Wire1, I2C_SDA_PIN, I2C_SCL_PIN, SERVOS8_ADDR);
   if (_connected) {
     _unit.setAllPinMode(SERVO_CTL_MODE);
     stopAllContinuous();

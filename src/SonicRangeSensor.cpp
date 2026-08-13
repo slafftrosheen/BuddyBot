@@ -10,11 +10,11 @@ bool SonicRangeSensor::begin() {
   _health = RangeSensorHealth::UNINITIALIZED;
   
   // Initialize the sensor via the existing Wire bus.
-  _sensor.begin(&Wire, 9, 10, SONIC_I2C_ADDR);
+  _sensor.begin(&Wire1, 9, 10, SONIC_I2C_ADDR);
 
   // Verify connection by doing a simple I2C probe
-  Wire.beginTransmission(SONIC_I2C_ADDR);
-  _connected = (Wire.endTransmission() == 0);
+  Wire1.beginTransmission(SONIC_I2C_ADDR);
+  _connected = (Wire1.endTransmission() == 0);
   
   if (_connected) {
     _health = RangeSensorHealth::READY;
