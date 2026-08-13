@@ -25,7 +25,7 @@ public:
   ActionId currentAction() const;
 
   void start(ActionId action);
-  void cancel(bool stopDrive = false);
+  void cancel(bool stopDrive = false, bool returnManipulatorsToRest = true);
 
 private:
   RobotHal* _hal = nullptr;

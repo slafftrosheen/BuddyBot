@@ -3,11 +3,13 @@
 
 void BootDiagnostics::begin(RobotAPI* robot) {
   _robot = robot;
+  _status = {};
   advanceTo(BootPhase::DISPLAY_OK);
 }
 
 void BootDiagnostics::advanceTo(BootPhase nextPhase) {
   _phase = nextPhase;
+  _status.phase = nextPhase;
   _phaseStartTime = millis();
   Serial.printf("BOOT: -> %s\n", phaseName(_phase));
 }
@@ -22,6 +24,7 @@ void BootDiagnostics::update() {
       break;
       
     case BootPhase::DISPLAY_OK:
+      _status.displayReady = true;
       if (elapsed > 200) {
         advanceTo(BootPhase::I2C_SCAN);
       }
@@ -33,8 +36,16 @@ void BootDiagnostics::update() {
       Wire1.beginTransmission(0x25);
       if (Wire1.endTransmission() == 0) foundServo = true;
       
+<<<<<<< HEAD
       Wire1.beginTransmission(0x57);
       if (Wire1.endTransmission() == 0) foundSonic = true;
+=======
+      Wire.beginTransmission(0x57);
+      if (Wire.endTransmission() == 0) foundSonic = true;
+
+      _status.servoBusPresent = foundServo;
+      _status.sonicPresent = foundSonic;
+>>>>>>> 638c121ac325cddcc76382fcae5f99ddbbccb279
       
       Serial.printf("BOOT: I2C Scan - Servo8: %s, Sonic: %s\n", foundServo ? "OK" : "MISSING", foundSonic ? "OK" : "MISSING");
       
@@ -60,12 +71,14 @@ void BootDiagnostics::update() {
     case BootPhase::DRIVE_SAFE_STOP:
       if (elapsed > 100) {
         _robot->stopAll();
+        _status.driveStopped = !_robot->isArmed();
         advanceTo(BootPhase::MANIPULATOR_CHECK);
       }
       break;
       
     case BootPhase::MANIPULATOR_CHECK:
       if (elapsed > 100) {
+        _status.manipulatorsChecked = true;
         advanceTo(BootPhase::COMPLETE);
       }
       break;

@@ -31,5 +31,7 @@ By default, the firmware compiles in a **Hardware-Safe Mode**.
 - `ENABLE_AUTONOMY_AT_BOOT = false`
 - `ENABLE_CAUTIOUS_ROAM = false`
 - `ALLOW_ACTION_DRIVE_MOVEMENT = false`
+- Motion is governed by the `SafetySupervisor` state machine (`BOOT`, `DISARMED`, `ARMED`, `FAULT`, `ESTOP`).
+- Controller loss and safety faults disarm the drive and require explicit recovery.
 
 The operator must perform a physical bench test and local calibration before enabling motor arming. Refer to `SAFETY_TEST_PLAN.md` for the correct procedures.

@@ -9,8 +9,7 @@ BuddyBot implements a SoftAP that serves a WebSocket interface for browser contr
 - **WebSocket**: `ws://192.168.4.1/ws`
 
 ## JSON Command Protocol
-The WebSocket accepts JSON payloads. All messages include an optional `id` for tracking and a `v` protocol version.
-For control commands, a `token` must be present, obtained via pairing.
+The WebSocket accepts bounded JSON objects. Every message includes `"v": 1`; authenticated control commands also require a positive, strictly increasing `id` and the session `token` obtained through pairing. Unknown fields, wrong types, fragmented frames, binary frames, oversized frames, and replayed command IDs are rejected.
 
 ### Handshake / Pairing
 Every message must include `"v": 1`. `hello`: Ask for initial status
@@ -25,18 +24,18 @@ Every message must include `"v": 1`. `hello`: Ask for initial status
 If successful, the robot replies with `{"type":"paired", "token":"..."}`. This token must be included in all subsequent control messages.
 
 ### Control Commands (Require Token)
-`arm` / `disarm`: Enable or disable motor output. These and all non-stop control commands require both `id` and `token`.
+`arm` / `disarm`: Enable or disable motor output. These and all non-stop control commands require both `id` and `token`. Arming is still denied unless the embedded safety state is `disarmed`, hardware is available, and the firmware arming switch is enabled.
 ```json
 { "v": 1, "id": 2, "type": "arm", "token": "..." }
 ```
 
-`move`: Drive in a specific direction for a set duration (max 250ms per message; keepalives expected)
+`move`: Drive in a specific direction for a required bounded duration (50–250ms). Clients must refresh held movement before it expires.
 ```json
 { "v": 1, "id": 3, "type": "move", "mode": "forward", "durationMs": 250, "token": "..." }
 ```
 Valid modes: `forward`, `reverse`, `turn_left`, `turn_right`.
 
-`stop`: Immediately stop drive motors. A paired controller may issue this with or without a token.
+`stop`: Immediately stops the drive. A paired controller may issue it with or without a token; it is intentionally idempotent and is not blocked by request sequencing.
 ```json
 { "type": "stop", "token": "..." }
 ```
@@ -61,9 +60,21 @@ The robot continuously broadcasts telemetry via WebSocket to all connected clien
   "revision": 1234,
   "motorsArmed": false,
   "rangeMm": 120,
-  "obstacleSafetyState": "blocked"
+  "obstacleSafetyState": "blocked",
+  "safetyState": "fault",
+  "safetyFault": "range_sensor_invalid"
 }
 ```
+
+Telemetry also includes `protocolVersion`, `configSchemaVersion`, `hardwareManifestVersion`, and `safetyPolicyVersion` so a companion controller can reject incompatible firmware. When the built-in BMI270 is available, telemetry includes `imuAvailable`, `imuValid`, `imuSampleTimeMs`, `accelG` (`x`, `y`, `z` in g), and `gyroDps` (`x`, `y`, `z` in degrees per second). Autonomous behavior is denied on unhealthy IMU data.
+
+## Session Liveness and Limits
+
+- A token-bearing `ping` with a new request ID renews the controller lease.
+- Movement is stopped, faulted, and disarmed when the drive watchdog expires after `WIFI_DRIVE_WATCHDOG_MS`.
+- Controller disconnect and lease expiry also fault and disarm the robot.
+- Pair failures are globally rate-limited across reconnects. Pairing enters a temporary lockout after the configured failure threshold.
+- Unpaired sockets are evicted after `WIFI_UNPAIRED_CLIENT_TIMEOUT_MS`; do not hold idle observer connections indefinitely.
 
 ## System Events
 The robot broadcasts system events for diagnostics and logging:

@@ -11,6 +11,12 @@ bool RollerDrive::begin() {
 }
 
 void RollerDrive::update() {
+  if (!isConnected()) {
+    emergencyStop();
+    _armed = false;
+    return;
+  }
+
   if (_stopAtMs > 0 && millis() >= _stopAtMs) {
     emergencyStop();
   }
@@ -89,8 +95,11 @@ void RollerDrive::drive(const DriveCommand& cmd) {
   if (ROLLER_LEFT_INVERTED) lSpeed = -lSpeed;
   if (ROLLER_RIGHT_INVERTED) rSpeed = -rSpeed;
 
-  _left->setSpeedRpm(lSpeed);
-  _right->setSpeedRpm(rSpeed);
+  if (!_left->setSpeedRpm(lSpeed) || !_right->setSpeedRpm(rSpeed)) {
+    emergencyStop();
+    _armed = false;
+    return;
+  }
 
   _mode = cmd.mode;
   if (cmd.durationMs > 0) {

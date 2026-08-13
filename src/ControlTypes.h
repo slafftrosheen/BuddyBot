@@ -7,7 +7,8 @@ enum class ControlSource : uint8_t {
   WIFI,
   BLE,
   LOCAL_UI,
-  AUTONOMY
+  AUTONOMY,
+  EXPRESSION
 };
 
 enum class CommandKind : uint8_t {
@@ -39,7 +40,8 @@ enum class CommandKind : uint8_t {
   JOINT_REST,
   VERSION,
   DIAG_BOOT,
-  PRINT_EVENTS
+  PRINT_EVENTS,
+  CTRL_IMU_STATUS
 };
 
 struct RobotCommand {

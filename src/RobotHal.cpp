@@ -46,8 +46,20 @@ bool RobotHal::begin(const RobotBuildConfig& config) {
     Serial.println("ERR: Unsupported or invalid build profile");
     return false;
   }
-  _servoBus.configureAll(servoConfig);
-  _servoBus.begin();
+
+  const bool requiresServoBus =
+    config.driveType == DriveControllerType::SERVO8_CONTINUOUS ||
+    config.headType == JointControllerType::SERVO8_POSITION ||
+    config.leftArmType == JointControllerType::SERVO8_POSITION ||
+    config.rightArmType == JointControllerType::SERVO8_POSITION ||
+    config.accessory1Type == AccessoryControllerType::SERVO8_POSITION;
+
+  if (requiresServoBus) {
+    if (!_servoBus.configureAll(servoConfig) || !_servoBus.begin()) {
+      Serial.println("ERR: Servo8 bus init failed");
+      return false;
+    }
+  }
 
   if (config.driveType == DriveControllerType::SERVO8_CONTINUOUS) {
     ServoDriveLayout layout;
@@ -58,10 +70,11 @@ bool RobotHal::begin(const RobotBuildConfig& config) {
     layout.rearRight = ServoRole::DRIVE_REAR_RIGHT;
     
     _servoDrive = std::unique_ptr<ServoDrive>(new ServoDrive(&_servoBus, layout));
-    if (_servoDrive) {
-      if (!_servoDrive->begin()) return false;
-      _drive = _servoDrive.get();
+    if (!_servoDrive || !_servoDrive->begin()) {
+      Serial.println("ERR: Servo drive init failed");
+      return false;
     }
+    _drive = _servoDrive.get();
   } else if (config.driveType == DriveControllerType::ROLLER_UNIT) {
     if (!config.useRoller1ForDrive || !config.useRoller2ForDrive) {
       Serial.println("ERR: Dual Roller drive requires both rollers configured");
@@ -82,32 +95,56 @@ bool RobotHal::begin(const RobotBuildConfig& config) {
   if (config.headType == JointControllerType::SERVO8_POSITION) {
     if (_servoBus.hasRole(ServoRole::HEAD)) {
       _headServo = std::unique_ptr<ServoJoint>(new ServoJoint(&_servoBus, ServoRole::HEAD));
-      if (_headServo) _headServo->begin();
+      if (!_headServo || !_headServo->begin()) {
+        Serial.println("ERR: Head joint init failed");
+        return false;
+      }
       _head = _headServo.get();
+    } else {
+      Serial.println("ERR: Head joint role unavailable");
+      return false;
     }
   }
 
   if (config.leftArmType == JointControllerType::SERVO8_POSITION) {
     if (_servoBus.hasRole(ServoRole::LEFT_ARM)) {
       _leftArmServo = std::unique_ptr<ServoJoint>(new ServoJoint(&_servoBus, ServoRole::LEFT_ARM));
-      if (_leftArmServo) _leftArmServo->begin();
+      if (!_leftArmServo || !_leftArmServo->begin()) {
+        Serial.println("ERR: Left arm joint init failed");
+        return false;
+      }
       _leftArm = _leftArmServo.get();
+    } else {
+      Serial.println("ERR: Left arm joint role unavailable");
+      return false;
     }
   }
 
   if (config.rightArmType == JointControllerType::SERVO8_POSITION) {
     if (_servoBus.hasRole(ServoRole::RIGHT_ARM)) {
       _rightArmServo = std::unique_ptr<ServoJoint>(new ServoJoint(&_servoBus, ServoRole::RIGHT_ARM));
-      if (_rightArmServo) _rightArmServo->begin();
+      if (!_rightArmServo || !_rightArmServo->begin()) {
+        Serial.println("ERR: Right arm joint init failed");
+        return false;
+      }
       _rightArm = _rightArmServo.get();
+    } else {
+      Serial.println("ERR: Right arm joint role unavailable");
+      return false;
     }
   }
 
   if (config.accessory1Type == AccessoryControllerType::SERVO8_POSITION) {
     if (_servoBus.hasRole(ServoRole::ACCESSORY_1)) {
       _acc1Servo = std::unique_ptr<ServoJoint>(new ServoJoint(&_servoBus, ServoRole::ACCESSORY_1));
-      if (_acc1Servo) _acc1Servo->begin();
+      if (!_acc1Servo || !_acc1Servo->begin()) {
+        Serial.println("ERR: Accessory 1 joint init failed");
+        return false;
+      }
       _acc1 = _acc1Servo.get();
+    } else {
+      Serial.println("ERR: Accessory 1 joint role unavailable");
+      return false;
     }
   }
 
@@ -176,16 +213,9 @@ ManipulatorState RobotHal::manipulatorState(ManipulatorId id) const {
   if (joint) {
     state.available = true;
     state.currentDeg = joint->current();
-    ServoJoint* sj = static_cast<ServoJoint*>(joint);
-    if (sj) {
-      state.targetDeg = sj->target();
-      state.moving = sj->motionActive();
-      state.motionState = sj->motionState();
-    } else {
-      state.targetDeg = state.currentDeg;
-      state.moving = false;
-      state.motionState = JointMotionState::IDLE;
-    }
+    state.targetDeg = joint->target();
+    state.moving = joint->motionActive();
+    state.motionState = joint->motionState();
   } else {
     state.available = false;
     state.motionState = JointMotionState::UNAVAILABLE;
@@ -194,11 +224,12 @@ ManipulatorState RobotHal::manipulatorState(ManipulatorId id) const {
   return state;
 }
 
-void RobotHal::writeRawPulse(ServoRole role, uint16_t pulseUs) {
+bool RobotHal::writeRawPulse(ServoRole role, uint16_t pulseUs) {
   if (_servoBus.isConnected()) {
     const ServoChannelConfig* cfg = _servoBus.configForRole(role);
     if (cfg && cfg->enabled) {
-      _servoBus.writePulse(cfg->channel, pulseUs);
+      return _servoBus.writePulse(cfg->channel, pulseUs);
     }
   }
+  return false;
 }

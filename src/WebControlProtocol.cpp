@@ -1,6 +1,28 @@
 #include "WebControlProtocol.h"
 #include "Config.h"
 
+namespace {
+bool hasOnlyFields(JsonObjectConst object, const char* const* allowedFields, size_t allowedCount) {
+  for (JsonPairConst entry : object) {
+    bool allowed = false;
+    for (size_t i = 0; i < allowedCount; ++i) {
+      if (strcmp(entry.key().c_str(), allowedFields[i]) == 0) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool requiresControlIdentity(const WebParsedMessage& message) {
+  return message.hasRequestId && message.requestId != 0 && message.hasToken;
+}
+}
+
 WebControlProtocol::WebControlProtocol() {}
 
 const char* WebControlProtocol::webProtocolErrorName(WebProtocolError err) const {
@@ -17,6 +39,7 @@ const char* WebControlProtocol::webProtocolErrorName(WebProtocolError err) const
     case WebProtocolError::PAIRING_UNAVAILABLE: return "pairing_unavailable";
     case WebProtocolError::PAIRING_FAILED: return "pairing_failed";
     case WebProtocolError::RATE_LIMITED: return "rate_limited";
+    case WebProtocolError::REPLAYED_COMMAND: return "replayed_command";
     case WebProtocolError::QUEUE_FULL: return "queue_full";
     case WebProtocolError::SUPERSEDED: return "superseded";
     case WebProtocolError::MOTORS_LOCKED: return "motors_locked";
@@ -68,21 +91,24 @@ bool WebControlProtocol::parseCommand(
     return false;
   }
 
-  if (!doc["v"].is<int>() || doc["v"].as<int>() != 1) {
+  if (!doc["v"].is<int>() || doc["v"].as<int>() != CONTROL_PROTOCOL_VERSION) {
     error = WebProtocolError::UNSUPPORTED_VERSION;
     return false;
   }
 
   if (doc["id"].is<uint32_t>()) {
-    out.requestId = doc["id"].as<uint32_t>();
-    out.hasRequestId = true;
+      out.requestId = doc["id"].as<uint32_t>();
+      out.hasRequestId = true;
+  } else if (!doc["id"].isNull()) {
+    error = WebProtocolError::INVALID_ARGUMENT;
+    return false;
   }
   
-  const char* typeStr = doc["type"];
-  if (!typeStr) {
+  if (!doc["type"].is<const char*>()) {
     error = WebProtocolError::UNKNOWN_TYPE;
     return false;
   }
+  const char* typeStr = doc["type"].as<const char*>();
 
   if (doc["token"].is<const char*>()) {
     const char* t = doc["token"].as<const char*>();
@@ -97,6 +123,9 @@ bool WebControlProtocol::parseCommand(
         out.hasToken = true;
       }
     }
+  } else if (!doc["token"].isNull()) {
+    error = WebProtocolError::INVALID_ARGUMENT;
+    return false;
   }
 
   if (strcmp(typeStr, "hello") == 0) out.type = WebMessageType::HELLO;
@@ -116,6 +145,48 @@ bool WebControlProtocol::parseCommand(
     return false;
   }
 
+  static const char* const queryFields[] = {"v", "id", "type", "token"};
+  static const char* const pairFields[] = {"v", "id", "type", "code"};
+  static const char* const moveFields[] = {"v", "id", "type", "token", "mode", "durationMs"};
+  static const char* const actionFields[] = {"v", "id", "type", "token", "action"};
+  static const char* const moodFields[] = {"v", "id", "type", "token", "mood"};
+  static const char* const accessoryFields[] = {"v", "id", "type", "token", "index", "active"};
+
+  const JsonObjectConst object = doc.as<JsonObjectConst>();
+  bool validSchema = false;
+  switch (out.type) {
+    case WebMessageType::HELLO:
+    case WebMessageType::PING:
+    case WebMessageType::STATUS:
+    case WebMessageType::STOP:
+    case WebMessageType::ARM:
+    case WebMessageType::DISARM:
+    case WebMessageType::PERSONA_NEXT:
+      validSchema = hasOnlyFields(object, queryFields, sizeof(queryFields) / sizeof(queryFields[0]));
+      break;
+    case WebMessageType::PAIR:
+      validSchema = hasOnlyFields(object, pairFields, sizeof(pairFields) / sizeof(pairFields[0]));
+      break;
+    case WebMessageType::MOVE:
+      validSchema = hasOnlyFields(object, moveFields, sizeof(moveFields) / sizeof(moveFields[0]));
+      break;
+    case WebMessageType::ACTION:
+      validSchema = hasOnlyFields(object, actionFields, sizeof(actionFields) / sizeof(actionFields[0]));
+      break;
+    case WebMessageType::MOOD:
+      validSchema = hasOnlyFields(object, moodFields, sizeof(moodFields) / sizeof(moodFields[0]));
+      break;
+    case WebMessageType::ACCESSORY:
+      validSchema = hasOnlyFields(object, accessoryFields, sizeof(accessoryFields) / sizeof(accessoryFields[0]));
+      break;
+    default:
+      break;
+  }
+  if (!validSchema) {
+    error = WebProtocolError::INVALID_ARGUMENT;
+    return false;
+  }
+
   switch (out.type) {
     case WebMessageType::HELLO:
     case WebMessageType::PING:
@@ -126,8 +197,12 @@ bool WebControlProtocol::parseCommand(
       if (doc["code"].is<const char*>()) {
         const char* c = doc["code"].as<const char*>();
         size_t dIdx = 0;
-        for (size_t i = 0; c[i] != '\0' && dIdx < WIFI_PAIRING_DIGITS; i++) {
+        for (size_t i = 0; c[i] != '\0'; i++) {
           if (isdigit(c[i])) {
+            if (dIdx >= WIFI_PAIRING_DIGITS) {
+              error = WebProtocolError::INVALID_ARGUMENT;
+              return false;
+            }
             out.pairingDigits[dIdx++] = c[i];
           } else if (c[i] != ' ') {
             error = WebProtocolError::INVALID_ARGUMENT;
@@ -148,23 +223,24 @@ bool WebControlProtocol::parseCommand(
       return true;
 
     case WebMessageType::ARM:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out)) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::ARM;
       return true;
 
     case WebMessageType::DISARM:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out)) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::DISARM;
       return true;
 
     case WebMessageType::PERSONA_NEXT:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out)) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::NEXT_PERSONA;
       return true;
 
     case WebMessageType::MOVE:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
-      out.command.driveMode = parseDriveMode(doc["mode"]);
+      if (!requiresControlIdentity(out)) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!doc["mode"].is<const char*>()) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      out.command.driveMode = parseDriveMode(doc["mode"].as<const char*>());
       
       if (out.command.driveMode == DriveMode::STOPPED) {
         if (doc["mode"].is<const char*>() && strcmp(doc["mode"].as<const char*>(), "stop") == 0) {
@@ -177,21 +253,22 @@ bool WebControlProtocol::parseCommand(
         out.command.kind = CommandKind::MOVE;
       }
       
-      if (doc["durationMs"].is<uint16_t>()) {
+      if (out.command.kind == CommandKind::MOVE && doc["durationMs"].is<uint16_t>()) {
         out.command.durationMs = doc["durationMs"].as<uint16_t>();
-        if (out.command.durationMs < 50 || out.command.durationMs > SAFE_DRIVE_TIME_MS) {
+        if (out.command.durationMs < 50 || out.command.durationMs > WIFI_DRIVE_COMMAND_DURATION_MS) {
           error = WebProtocolError::INVALID_ARGUMENT;
           return false;
         }
-      } else {
-        out.command.durationMs = 0;
+      } else if (out.command.kind == CommandKind::MOVE) {
+        error = WebProtocolError::INVALID_ARGUMENT;
+        return false;
       }
       return true;
 
     case WebMessageType::ACTION:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out) || !doc["action"].is<const char*>()) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::ACTION;
-      out.command.action = parseAction(doc["action"]);
+      out.command.action = parseAction(doc["action"].as<const char*>());
       if (out.command.action == ActionId::NONE) {
         error = WebProtocolError::INVALID_ARGUMENT;
         return false;
@@ -199,13 +276,20 @@ bool WebControlProtocol::parseCommand(
       return true;
 
     case WebMessageType::MOOD:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out) || !doc["mood"].is<const char*>()) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::SET_MOOD;
-      out.command.mood = parseMood(doc["mood"]);
+      {
+        const char* mood = doc["mood"].as<const char*>();
+        out.command.mood = parseMood(mood);
+        if (out.command.mood == Mood::IDLE && strcmp(mood, "idle") != 0) {
+          error = WebProtocolError::INVALID_ARGUMENT;
+          return false;
+        }
+      }
       return true;
 
     case WebMessageType::ACCESSORY:
-      if (!out.hasRequestId || !out.hasToken) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
+      if (!requiresControlIdentity(out)) { error = WebProtocolError::INVALID_ARGUMENT; return false; }
       out.command.kind = CommandKind::ACCESSORY;
       if (doc["index"].is<uint8_t>() && doc["active"].is<bool>()) {
         out.command.index = doc["index"].as<uint8_t>();
@@ -326,8 +410,28 @@ String WebControlProtocol::generateTelemetry(const RobotTelemetry& t) {
   if (t.autonomyState) doc["autonomyState"] = t.autonomyState;
   if (t.obstacleSafetyState) doc["obstacleSafetyState"] = t.obstacleSafetyState;
   if (t.rangeSensorHealth) doc["rangeSensorHealth"] = t.rangeSensorHealth;
+  if (t.safetyState) doc["safetyState"] = t.safetyState;
+  if (t.safetyFault) doc["safetyFault"] = t.safetyFault;
+  doc["safetyStateChangedMs"] = t.safetyStateChangedMs;
   doc["forwardMotionBlocked"] = t.forwardMotionBlocked;
   doc["actionRunning"] = t.actionRunning;
+  doc["imuAvailable"] = t.imuAvailable;
+  doc["imuValid"] = t.imuValid;
+  if (t.imuValid) {
+    doc["imuSampleTimeMs"] = t.imuSampleTimeMs;
+    JsonObject accel = doc["accelG"].to<JsonObject>();
+    accel["x"] = t.accelXG;
+    accel["y"] = t.accelYG;
+    accel["z"] = t.accelZG;
+    JsonObject gyro = doc["gyroDps"].to<JsonObject>();
+    gyro["x"] = t.gyroXDps;
+    gyro["y"] = t.gyroYDps;
+    gyro["z"] = t.gyroZDps;
+  }
+  doc["protocolVersion"] = t.protocolVersion;
+  doc["configSchemaVersion"] = t.configSchemaVersion;
+  doc["hardwareManifestVersion"] = t.hardwareManifestVersion;
+  doc["safetyPolicyVersion"] = t.safetyPolicyVersion;
 
   String out;
   serializeJson(doc, out);
@@ -343,6 +447,10 @@ String WebControlProtocol::generateEventLog(const EventLogEntry* entries, size_t
     obj["ts"] = entries[i].timestampMs;
     obj["sev"] = entries[i].severity;
     obj["code"] = entries[i].code;
+    obj["component"] = entries[i].component;
+    if (entries[i].correlationId != 0) {
+      obj["correlationId"] = entries[i].correlationId;
+    }
   }
   String out;
   serializeJson(doc, out);

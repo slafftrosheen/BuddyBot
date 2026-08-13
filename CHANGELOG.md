@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- Added a persisted `SafetySupervisor` state machine, local E-stop chord, task watchdog, structured diagnostics, and safety telemetry.
+- Added stricter hardware-manifest validation, safety policy tests, and protocol validation coverage.
+- Added companion-host MCP gateway contract documentation.
+
+### Changed
+- Removed tracked PlatformIO output and generated compilation metadata.
+- Pinned PlatformIO library versions and added test compilation to CI.
+- Hardened WebSocket parsing, command sequencing, pairing lockouts, controller liveness, and idle-client cleanup.
+
+### Security & Safety
+- Wi-Fi controller disconnect, lease expiry, and drive watchdog expiry now fault and disarm the robot.
+- Autonomous behavior requires healthy range and IMU data; raw servo diagnostics require the bench build.
+
 ## [0.3.0-beta.1] - 2026-07-22
 ### Added
 - Added modular HAL to separate API commands from hardware specifics.

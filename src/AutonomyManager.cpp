@@ -23,6 +23,12 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
     if (_state != AutonomyState::IDLE) _state = AutonomyState::IDLE;
     return false;
   }
+
+  if (!_robot->autonomyMotionAllowed()) {
+    _state = AutonomyState::IDLE;
+    return false;
+  }
+
   if (_state == AutonomyState::IDLE) {
     _state = AutonomyState::MONITORING;
   }
