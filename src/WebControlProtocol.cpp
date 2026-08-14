@@ -540,14 +540,14 @@ String WebControlProtocol::generateRuntimeSnapshot(uint32_t requestId, const Run
   return out;
 }
 
-String WebControlProtocol::generateExecResult(const char* intentId, bool success, const String& reason, const String& sessionId, const String& safetyState, const String& fault) {
+String WebControlProtocol::generateExecResult(const char* intentId, const char* status, const String& reason, const String& sessionId, const String& safetyState, const String& fault) {
   JsonDocument doc;
   doc["type"] = "exec_result";
   if (intentId != nullptr && intentId[0] != '\0') {
     doc["intentId"] = intentId;
   }
-  doc["status"] = success ? "SUCCEEDED" : "FAILED";
-  if (!success && reason.length() > 0) {
+  doc["status"] = status;
+  if (reason.length() > 0) {
     doc["reason"] = reason;
   }
   if (sessionId.length() > 0) {

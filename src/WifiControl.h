@@ -46,8 +46,12 @@ struct WifiControllerSession {
   uint32_t lastRequestId = 0;
   uint32_t generation = 0;
 
+  struct RecentIntent {
+    char intentId[37];
+    char status[16];
+  };
   static const size_t MAX_RECENT_INTENTS = 4;
-  char recentIntents[MAX_RECENT_INTENTS][37] = {};
+  RecentIntent recentIntents[MAX_RECENT_INTENTS] = {};
   size_t recentIntentsHead = 0;
 };
 

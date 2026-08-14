@@ -659,29 +659,32 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       return;
     }
 
-    if (msg.command.intentId[0] != '\0') {
-      bool duplicate = false;
-      portENTER_CRITICAL(&_stateMux);
-      if (_session.active && _session.clientId == clientId) {
-        for (size_t i = 0; i < WifiControllerSession::MAX_RECENT_INTENTS; ++i) {
-          if (_session.recentIntents[i][0] != '\0' && strcmp(_session.recentIntents[i], msg.command.intentId) == 0) {
-            duplicate = true;
-            break;
+      if (msg.command.intentId[0] != '\0') {
+        bool duplicate = false;
+        const char* duplicateStatus = "SUCCEEDED";
+        portENTER_CRITICAL(&_stateMux);
+        if (_session.active && _session.clientId == clientId) {
+          for (size_t i = 0; i < WifiControllerSession::MAX_RECENT_INTENTS; ++i) {
+            if (_session.recentIntents[i].intentId[0] != '\0' && strcmp(_session.recentIntents[i].intentId, msg.command.intentId) == 0) {
+              duplicate = true;
+              duplicateStatus = _session.recentIntents[i].status;
+              break;
+            }
+          }
+          if (!duplicate) {
+             strlcpy(_session.recentIntents[_session.recentIntentsHead].intentId, msg.command.intentId, sizeof(_session.recentIntents[0].intentId));
+             strlcpy(_session.recentIntents[_session.recentIntentsHead].status, "PENDING", sizeof(_session.recentIntents[0].status));
+             _session.recentIntentsHead = (_session.recentIntentsHead + 1) % WifiControllerSession::MAX_RECENT_INTENTS;
           }
         }
-        if (!duplicate) {
-           strlcpy(_session.recentIntents[_session.recentIntentsHead], msg.command.intentId, sizeof(_session.recentIntents[0]));
-           _session.recentIntentsHead = (_session.recentIntentsHead + 1) % WifiControllerSession::MAX_RECENT_INTENTS;
-        }
-      }
-      portEXIT_CRITICAL(&_stateMux);
-      if (duplicate) {
-        _ws->text(clientId, _protocol.generateExecResult(
-            msg.command.intentId, true, "already_executed",
-            _session.token,
-            SafetySupervisor::stateName(_robot->safetyState()),
-            SafetySupervisor::faultName(_robot->safetyFault())
-        ));
+        portEXIT_CRITICAL(&_stateMux);
+        if (duplicate) {
+          _ws->text(clientId, _protocol.generateExecResult(
+              msg.command.intentId, duplicateStatus, "already_executed",
+              _session.token,
+              SafetySupervisor::stateName(_robot->safetyState()),
+              SafetySupervisor::faultName(_robot->safetyFault())
+          ));
         if (msg.hasRequestId) {
           _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
         }
@@ -880,8 +883,26 @@ void WifiControl::update() {
     }
     
     if (qc.command.intentId[0] != '\0') {
+      const char* terminalStatus = "FAILED";
+      if (ok) {
+        terminalStatus = "SUCCEEDED";
+      } else if (replyMsg == "session_expired" || replyMsg == "not_controller") {
+        terminalStatus = "REJECTED";
+      } else if (replyMsg == "superseded") {
+        terminalStatus = "ABORTED";
+      }
+
+      portENTER_CRITICAL(&_stateMux);
+      for (size_t i = 0; i < WifiControllerSession::MAX_RECENT_INTENTS; ++i) {
+        if (strcmp(_session.recentIntents[i].intentId, qc.command.intentId) == 0) {
+          strlcpy(_session.recentIntents[i].status, terminalStatus, sizeof(_session.recentIntents[i].status));
+          break;
+        }
+      }
+      portEXIT_CRITICAL(&_stateMux);
+
       _ws->text(qc.clientId, _protocol.generateExecResult(
-          qc.command.intentId, ok, replyMsg,
+          qc.command.intentId, terminalStatus, replyMsg,
           _session.token,
           SafetySupervisor::stateName(_robot->safetyState()),
           SafetySupervisor::faultName(_robot->safetyFault())

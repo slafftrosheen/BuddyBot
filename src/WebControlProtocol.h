@@ -77,7 +77,7 @@ public:
   String generateTelemetry(const RobotTelemetry& t);
   String generateEventLog(const EventLogEntry* entries, size_t count);
   String generateRuntimeSnapshot(uint32_t requestId, const RuntimeSnapshot& snapshot);
-  String generateExecResult(const char* intentId, bool success, const String& reason, const String& sessionId = "", const String& safetyState = "", const String& fault = "");
+  String generateExecResult(const char* intentId, const char* status, const String& reason, const String& sessionId = "", const String& safetyState = "", const String& fault = "");
 
 private:
   DriveMode parseDriveMode(const char* modeStr);
