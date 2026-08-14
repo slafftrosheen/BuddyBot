@@ -21,7 +21,9 @@ enum class WebMessageType : uint8_t {
   MOOD,
   PERSONA_NEXT,
   ACCESSORY,
-  STATE
+  STATE,
+  HANDSHAKE,
+  EXEC_RESULT
 };
 
 enum class WebProtocolError : uint8_t {
@@ -75,6 +77,7 @@ public:
   String generateTelemetry(const RobotTelemetry& t);
   String generateEventLog(const EventLogEntry* entries, size_t count);
   String generateRuntimeSnapshot(uint32_t requestId, const RuntimeSnapshot& snapshot);
+  String generateExecResult(const char* intentId, bool success, const String& reason, const String& sessionId = "", const String& safetyState = "", const String& fault = "");
 
 private:
   DriveMode parseDriveMode(const char* modeStr);

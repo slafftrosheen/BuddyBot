@@ -45,6 +45,10 @@ struct WifiControllerSession {
   bool hasLastRequestId = false;
   uint32_t lastRequestId = 0;
   uint32_t generation = 0;
+
+  static const size_t MAX_RECENT_INTENTS = 4;
+  char recentIntents[MAX_RECENT_INTENTS][37] = {};
+  size_t recentIntentsHead = 0;
 };
 
 class WifiControl {

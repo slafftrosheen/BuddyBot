@@ -513,8 +513,8 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   }
 
   if (msg.type == WebMessageType::HELLO || msg.type == WebMessageType::STATUS ||
-      msg.type == WebMessageType::PING) {
-    if (msg.type == WebMessageType::PING && msg.hasToken) {
+      msg.type == WebMessageType::PING || msg.type == WebMessageType::HANDSHAKE) {
+    if ((msg.type == WebMessageType::PING || msg.type == WebMessageType::HANDSHAKE) && msg.hasToken) {
       uint32_t sessionGeneration = 0;
       if (!msg.hasRequestId || !controllerMatches(clientId, msg, &sessionGeneration)) {
         _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
@@ -658,6 +658,37 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
       return;
     }
+
+    if (msg.command.intentId[0] != '\0') {
+      bool duplicate = false;
+      portENTER_CRITICAL(&_stateMux);
+      if (_session.active && _session.clientId == clientId) {
+        for (size_t i = 0; i < WifiControllerSession::MAX_RECENT_INTENTS; ++i) {
+          if (_session.recentIntents[i][0] != '\0' && strcmp(_session.recentIntents[i], msg.command.intentId) == 0) {
+            duplicate = true;
+            break;
+          }
+        }
+        if (!duplicate) {
+           strlcpy(_session.recentIntents[_session.recentIntentsHead], msg.command.intentId, sizeof(_session.recentIntents[0]));
+           _session.recentIntentsHead = (_session.recentIntentsHead + 1) % WifiControllerSession::MAX_RECENT_INTENTS;
+        }
+      }
+      portEXIT_CRITICAL(&_stateMux);
+      if (duplicate) {
+        _ws->text(clientId, _protocol.generateExecResult(
+            msg.command.intentId, true, "already_executed",
+            _session.token,
+            SafetySupervisor::stateName(_robot->safetyState()),
+            SafetySupervisor::faultName(_robot->safetyFault())
+        ));
+        if (msg.hasRequestId) {
+          _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
+        }
+        return;
+      }
+    }
+
     QueuedCommand qc;
     qc.command = msg.command;
     qc.enqueuedMs = now;
@@ -848,6 +879,15 @@ void WifiControl::update() {
       _ws->text(qc.clientId, _protocol.generateAck(qc.requestId, ok, replyMsg, _router->currentEpoch()));
     }
     
+    if (qc.command.intentId[0] != '\0') {
+      _ws->text(qc.clientId, _protocol.generateExecResult(
+          qc.command.intentId, ok, replyMsg,
+          _session.token,
+          SafetySupervisor::stateName(_robot->safetyState()),
+          SafetySupervisor::faultName(_robot->safetyFault())
+      ));
+    }
+    
     if (executeIt) broadcastTelemetry();
   }
 
@@ -988,7 +1028,12 @@ void WifiControl::broadcastTelemetry() {
   }
 
   String telemetryJson = _protocol.generateTelemetry(t);
-  if (_ws) _ws->textAll(telemetryJson);
+  if (_ws) {
+    _ws->textAll(telemetryJson);
+    if (_robot) {
+      _ws->textAll(_protocol.generateRuntimeSnapshot(0, _robot->runtimeSnapshot()));
+    }
+  }
 }
 
 void WifiControl::broadcastEvents() {

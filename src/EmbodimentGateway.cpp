@@ -41,11 +41,7 @@ IntentResult EmbodimentGateway::submit(const RobotIntent& intent, const RuntimeC
         
         // Command execution determines if it was authorized and succeeded
         // The CommandExecutor will internally consult the SafetySupervisor
-        // and notify EXECUTING / SUCCEEDED / DENIED / FAILED if we pass the callback
-        // For now, CommandExecutor returns bool. We can adapt this.
-        
-        // Wait, the executor doesn't know about intentId yet. We need to pass intentId.
-        // Let's copy the intentId to the result so it can be used.
+        // and notify DENIED / FAILED / SUCCEEDED via its result.
         strncpy(res.intentId, intent.intentId, sizeof(res.intentId) - 1);
         res.intentId[sizeof(res.intentId) - 1] = '\0';
         

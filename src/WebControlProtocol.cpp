@@ -64,6 +64,8 @@ const char* WebControlProtocol::webMessageTypeName(WebMessageType type) const {
     case WebMessageType::PERSONA_NEXT: return "persona_next";
     case WebMessageType::ACCESSORY: return "accessory";
     case WebMessageType::STATE: return "state";
+    case WebMessageType::HANDSHAKE: return "handshake";
+    case WebMessageType::EXEC_RESULT: return "exec_result";
     default: return "unknown";
   }
 }
@@ -142,12 +144,14 @@ bool WebControlProtocol::parseCommand(
   else if (strcmp(typeStr, "persona_next") == 0) out.type = WebMessageType::PERSONA_NEXT;
   else if (strcmp(typeStr, "accessory") == 0) out.type = WebMessageType::ACCESSORY;
   else if (strcmp(typeStr, "state") == 0) out.type = WebMessageType::STATE;
+  else if (strcmp(typeStr, "handshake") == 0) out.type = WebMessageType::HANDSHAKE;
   else {
     error = WebProtocolError::UNKNOWN_TYPE;
     return false;
   }
 
   static const char* const queryFields[] = {"v", "id", "type", "token"};
+  static const char* const handshakeFields[] = {"v", "id", "type", "token"};
   static const char* const pairFields[] = {"v", "id", "type", "code"};
   static const char* const moveFields[] = {"v", "id", "type", "token", "mode", "durationMs"};
   static const char* const actionFields[] = {"v", "id", "type", "token", "action"};
@@ -165,6 +169,7 @@ bool WebControlProtocol::parseCommand(
     case WebMessageType::DISARM:
     case WebMessageType::PERSONA_NEXT:
     case WebMessageType::STATE:
+    case WebMessageType::HANDSHAKE:
       validSchema = hasOnlyFields(object, queryFields, sizeof(queryFields) / sizeof(queryFields[0]));
       break;
     case WebMessageType::PAIR:
@@ -195,6 +200,7 @@ bool WebControlProtocol::parseCommand(
     case WebMessageType::PING:
     case WebMessageType::STATUS:
     case WebMessageType::STATE:
+    case WebMessageType::HANDSHAKE:
       return true;
 
     case WebMessageType::PAIR: {
@@ -306,6 +312,11 @@ bool WebControlProtocol::parseCommand(
     default:
       error = WebProtocolError::UNKNOWN_TYPE;
       return false;
+  }
+  
+  // Parse intentId if present (applicable to any semantic command)
+  if (doc["intentId"].is<const char*>()) {
+    strlcpy(out.command.intentId, doc["intentId"].as<const char*>(), sizeof(out.command.intentId));
   }
 }
 
@@ -524,6 +535,31 @@ String WebControlProtocol::generateRuntimeSnapshot(uint32_t requestId, const Run
   hardwareObj["servoBusPresent"] = snapshot.hardware.servoBusPresent;
   hardwareObj["sonicPresent"] = snapshot.hardware.sonicPresent;
 
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+String WebControlProtocol::generateExecResult(const char* intentId, bool success, const String& reason, const String& sessionId, const String& safetyState, const String& fault) {
+  JsonDocument doc;
+  doc["type"] = "exec_result";
+  if (intentId != nullptr && intentId[0] != '\0') {
+    doc["intentId"] = intentId;
+  }
+  doc["status"] = success ? "SUCCEEDED" : "FAILED";
+  if (!success && reason.length() > 0) {
+    doc["reason"] = reason;
+  }
+  if (sessionId.length() > 0) {
+    doc["sessionId"] = sessionId;
+  }
+  if (safetyState.length() > 0) {
+    doc["safetyState"] = safetyState;
+  }
+  if (fault.length() > 0) {
+    doc["fault"] = fault;
+  }
+  
   String out;
   serializeJson(doc, out);
   return out;
