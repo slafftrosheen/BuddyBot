@@ -209,6 +209,11 @@ SafetyFault ControlRouter::safetyFault() const {
   return _safety ? _safety->fault() : SafetyFault::BOOT_INCOMPLETE;
 }
 
+const char* ControlRouter::autonomyStateName() const {
+  if (!_autonomy) return "DISABLED";
+  return AutonomyManager::stateName(_autonomy->state());
+}
+
 bool ControlRouter::execute(const RobotCommand& cmd) {
   if (_robot == nullptr) return false;
   updateSafety();

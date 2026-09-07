@@ -40,6 +40,7 @@ private:
   RobotAPI* _robot = nullptr;
   BootPhase _phase = BootPhase::NOT_STARTED;
   uint32_t _phaseStartTime = 0;
+  uint32_t _bootStartTime = 0;
   BootDiagnosticStatus _status;
   
   void advanceTo(BootPhase nextPhase);

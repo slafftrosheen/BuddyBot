@@ -26,6 +26,7 @@ public:
   uint32_t lastInterventionEpoch() const { return _lastInterventionEpoch; }
   SafetyState safetyState() const;
   SafetyFault safetyFault() const;
+  const char* autonomyStateName() const;
 
 private:
   SafetyInputs buildSafetyInputs() const;

@@ -1,9 +1,11 @@
 #include "BootDiagnostics.h"
+#include "Config.h"
 #include <Wire.h>
 
 void BootDiagnostics::begin(RobotAPI* robot) {
   _robot = robot;
   _status = {};
+  _bootStartTime = millis();
   advanceTo(BootPhase::DISPLAY_OK);
 }
 
@@ -16,6 +18,14 @@ void BootDiagnostics::advanceTo(BootPhase nextPhase) {
 
 void BootDiagnostics::update() {
   if (isComplete()) return;
+
+  // Global boot timeout — prevent infinite stall on hardware faults
+  if (millis() - _bootStartTime > BOOT_TIMEOUT_MS) {
+    Serial.printf("BOOT: TIMEOUT after %lums in phase %s — entering degraded mode\n",
+                  (unsigned long)(millis() - _bootStartTime), phaseName(_phase));
+    advanceTo(BootPhase::DEGRADED);
+    return;
+  }
   
   uint32_t elapsed = millis() - _phaseStartTime;
   

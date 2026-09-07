@@ -60,8 +60,9 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
       if (now - _stateMs >= AUTONOMY_REVERSE_MS) {
         outCommand.source = ControlSource::AUTONOMY;
         outCommand.kind = CommandKind::MOVE;
-        outCommand.driveMode = DriveMode::TURN_RIGHT;
+        outCommand.driveMode = _turnRight ? DriveMode::TURN_RIGHT : DriveMode::TURN_LEFT;
         outCommand.durationMs = AUTONOMY_TURN_MS;
+        _turnRight = !_turnRight;
         _stateMs = now;
         _state = AutonomyState::TURNING;
         return true;
@@ -104,4 +105,17 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
   }
 
   return false;
+}
+
+const char* AutonomyManager::stateName(AutonomyState state) {
+  switch (state) {
+    case AutonomyState::IDLE:               return "IDLE";
+    case AutonomyState::MONITORING:         return "MONITORING";
+    case AutonomyState::STOPPING:           return "STOPPING";
+    case AutonomyState::BACKING_UP:         return "BACKING_UP";
+    case AutonomyState::TURNING:            return "TURNING";
+    case AutonomyState::WAIT_FOR_CLEARANCE: return "WAIT_FOR_CLEARANCE";
+    case AutonomyState::RESUMING:           return "RESUMING";
+  }
+  return "UNKNOWN";
 }

@@ -102,6 +102,9 @@ void test_safe_intent(void) {
     ctx.capabilities.drive.permitted = true;
     ctx.snapshot.behavior.autonomyEnabled = true;
     ctx.snapshot.safety.autonomyMotionAllowed = true;
+    ctx.snapshot.range.available = true;
+    ctx.snapshot.range.valid = true;
+    ctx.snapshot.range.distanceMm = 500; // Clear path
     
     RuleReasoningProvider provider;
     CognitiveDecision decision = provider.reason(ctx);
@@ -136,6 +139,9 @@ void test_intent_id(void) {
     ctx.capabilities.drive.permitted = true;
     ctx.snapshot.behavior.autonomyEnabled = true;
     ctx.snapshot.safety.autonomyMotionAllowed = true;
+    ctx.snapshot.range.available = true;
+    ctx.snapshot.range.valid = true;
+    ctx.snapshot.range.distanceMm = 500;
     
     CognitiveDecision decision2 = provider.reason(ctx);
     TEST_ASSERT_EQUAL_STRING("12345", decision2.intentId);

@@ -75,6 +75,7 @@ constexpr uint16_t SAFETY_MANUAL_OVERRIDE_MS = 600;
 constexpr uint16_t PHYSICAL_ESTOP_HOLD_MS = 1200;
 constexpr uint16_t PHYSICAL_ESTOP_RESET_HOLD_MS = 2500;
 constexpr uint16_t SYSTEM_TASK_WATCHDOG_TIMEOUT_MS = 3000;
+constexpr uint32_t BOOT_TIMEOUT_MS = 5000;
 
 static_assert(!ALLOW_MOTOR_ARMING || ENABLE_OBSTACLE_SAFETY, "Motor arming should not be enabled without obstacle safety");
 static_assert(!ENABLE_CAUTIOUS_ROAM || ALLOW_MOTOR_ARMING, "Cautious roam requires motor arming");

@@ -22,9 +22,12 @@ public:
   bool update(RobotCommand& outCommand);
   AutonomyState state() const { return _state; }
 
+  static const char* stateName(AutonomyState state);
+
 private:
   RobotAPI* _robot = nullptr;
   bool _enabled = false;
   AutonomyState _state = AutonomyState::IDLE;
   uint32_t _stateMs = 0;
+  bool _turnRight = true;
 };

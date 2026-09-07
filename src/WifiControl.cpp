@@ -988,7 +988,7 @@ void WifiControl::broadcastTelemetry() {
   t.autonomyEnabled = _robot->autonomyEnabled();
   
   t.autonomyMode = t.autonomyEnabled ? "ASSISTED_AVOIDANCE" : "OFF";
-  t.autonomyState = "IDLE"; // AutonomyManager state is internal, mock it for now or expose it
+  t.autonomyState = _router ? _router->autonomyStateName() : "UNKNOWN";
 
   t.buildName = getActiveBuildName();
   t.personaName = _robot->personaName();
