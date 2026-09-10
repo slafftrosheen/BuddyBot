@@ -86,6 +86,7 @@ private:
   bool dequeueCommand(QueuedCommand& cmd);
   void clearQueuedCommands();
   void requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fault);
+  void processPendingStop();
   WifiClientState* getClientState(uint32_t clientId);
   bool constantTimeEquals(const char* a, const char* b, size_t n) const;
   bool controllerMatches(

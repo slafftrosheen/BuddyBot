@@ -43,10 +43,10 @@ void BootDiagnostics::update() {
     case BootPhase::I2C_SCAN: {
       bool foundServo = false;
       bool foundSonic = false;
-      Wire1.beginTransmission(0x25);
+      Wire1.beginTransmission(SERVOS8_ADDR);
       if (Wire1.endTransmission() == 0) foundServo = true;
       
-      Wire1.beginTransmission(0x57);
+      Wire1.beginTransmission(SONIC_I2C_ADDR);
       if (Wire1.endTransmission() == 0) foundSonic = true;
 
       _status.servoBusPresent = foundServo;

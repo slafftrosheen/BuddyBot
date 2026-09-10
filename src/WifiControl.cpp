@@ -420,7 +420,7 @@ void WifiControl::evictIdleUnpairedClients(uint32_t nowMs) {
 bool WifiControl::enqueueCommand(const QueuedCommand& cmd) {
   bool success = false;
   portENTER_CRITICAL(&_queueMux);
-  if (_cmdQueueSize < WIFI_COMMAND_QUEUE_CAPACITY) {
+  if (!_pendingStop && _cmdQueueSize < WIFI_COMMAND_QUEUE_CAPACITY) {
     _cmdQueue[_cmdQueueTail] = cmd;
     _cmdQueueTail = (_cmdQueueTail + 1) % WIFI_COMMAND_QUEUE_CAPACITY;
     _cmdQueueSize++;
@@ -433,7 +433,7 @@ bool WifiControl::enqueueCommand(const QueuedCommand& cmd) {
 bool WifiControl::dequeueCommand(QueuedCommand& cmd) {
   bool success = false;
   portENTER_CRITICAL(&_queueMux);
-  if (_cmdQueueSize > 0) {
+  if (!_pendingStop && _cmdQueueSize > 0) {
     cmd = _cmdQueue[_cmdQueueHead];
     _cmdQueueHead = (_cmdQueueHead + 1) % WIFI_COMMAND_QUEUE_CAPACITY;
     _cmdQueueSize--;
@@ -453,6 +453,9 @@ void WifiControl::clearQueuedCommands() {
 
 void WifiControl::requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fault) {
   portENTER_CRITICAL(&_queueMux);
+  _cmdQueueHead = 0;
+  _cmdQueueTail = 0;
+  _cmdQueueSize = 0;
   if (!_pendingStop ||
       _pendingStopFault == SafetyFault::NONE ||
       fault != SafetyFault::NONE) {
@@ -461,6 +464,41 @@ void WifiControl::requestEmergencyStopFromWifi(uint32_t clientId, SafetyFault fa
     _pendingStopFault = fault;
   }
   portEXIT_CRITICAL(&_queueMux);
+}
+
+void WifiControl::processPendingStop() {
+  bool doPendingStop = false;
+  SafetyFault stopFault = SafetyFault::NONE;
+  portENTER_CRITICAL(&_queueMux);
+  if (_pendingStop) {
+    doPendingStop = true;
+    stopFault = _pendingStopFault;
+    _pendingStop = false;
+    _cmdQueueHead = 0;
+    _cmdQueueTail = 0;
+    _cmdQueueSize = 0;
+  }
+  portEXIT_CRITICAL(&_queueMux);
+
+  if (doPendingStop) {
+    if (stopFault == SafetyFault::NONE) {
+      RobotCommand stopCmd;
+      stopCmd.kind = CommandKind::STOP;
+      stopCmd.source = ControlSource::WIFI;
+      if (_router) {
+        _router->execute(stopCmd);
+      }
+    } else {
+      if (_router) {
+        _router->emergencyStop(stopFault);
+      }
+    }
+    portENTER_CRITICAL(&_stateMux);
+    _session.driveWatchdogStopped = true;
+    _session.lastActiveDriveMs = 0;
+    portEXIT_CRITICAL(&_stateMux);
+    broadcastTelemetry();
+  }
 }
 
 void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, uint32_t clientId) {
@@ -654,7 +692,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       if (msg.command.intentId[0] != '\0') {
         _ws->text(clientId, _protocol.generateExecResult(
             msg.command.intentId, "REJECTED", "not_controller",
-            _session.token,
+            "",
             SafetySupervisor::stateName(_robot->safetyState()),
             SafetySupervisor::faultName(_robot->safetyFault())
         ));
@@ -666,7 +704,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       if (msg.command.intentId[0] != '\0') {
         _ws->text(clientId, _protocol.generateExecResult(
             msg.command.intentId, "REJECTED", "bad_token",
-            _session.token,
+            "",
             SafetySupervisor::stateName(_robot->safetyState()),
             SafetySupervisor::faultName(_robot->safetyFault())
         ));
@@ -674,11 +712,19 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
       return;
     }
+
+    char currentToken[WIFI_SESSION_TOKEN_HEX_CHARS + 1] = {};
+    portENTER_CRITICAL(&_stateMux);
+    if (_session.active && _session.clientId == clientId) {
+      strlcpy(currentToken, _session.token, sizeof(currentToken));
+    }
+    portEXIT_CRITICAL(&_stateMux);
+
     if (!acceptRequestId(msg.requestId, sessionGeneration)) {
       if (msg.command.intentId[0] != '\0') {
         _ws->text(clientId, _protocol.generateExecResult(
             msg.command.intentId, "REJECTED", "replayed_command",
-            _session.token,
+            currentToken,
             SafetySupervisor::stateName(_robot->safetyState()),
             SafetySupervisor::faultName(_robot->safetyFault())
         ));
@@ -709,7 +755,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
         if (duplicate) {
           _ws->text(clientId, _protocol.generateExecResult(
               msg.command.intentId, duplicateStatus, "already_executed",
-              _session.token,
+              currentToken,
               SafetySupervisor::stateName(_robot->safetyState()),
               SafetySupervisor::faultName(_robot->safetyFault())
           ));
@@ -724,7 +770,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     qc.command = msg.command;
     qc.enqueuedMs = now;
     qc.observedEpoch = _router->currentEpoch();
-    qc.requestId = msg.hasRequestId ? msg.requestId : 0;
+    qc.requestId = msg.requestId;
     qc.clientId = clientId;
     qc.sessionGeneration = sessionGeneration;
 
@@ -736,6 +782,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
   } else {
     bool controllerOwned = false;
     bool tokenMatches = !msg.hasToken;
+    char stopToken[WIFI_SESSION_TOKEN_HEX_CHARS + 1] = {};
     if (!acquireDispatchLock()) {
       _ws->text(clientId, _protocol.generateError(msg.requestId, "internal_error"));
       return;
@@ -746,6 +793,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
       tokenMatches = constantTimeEquals(msg.token, _session.token, WIFI_SESSION_TOKEN_HEX_CHARS);
     }
     if (controllerOwned) {
+      strlcpy(stopToken, _session.token, sizeof(stopToken));
       _session.leaseExpiryMs = now + WIFI_CONTROLLER_LEASE_MS;
       _session.lastAcceptedCommandMs = now;
     }
@@ -765,7 +813,7 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     if (msg.command.intentId[0] != '\0') {
       _ws->text(clientId, _protocol.generateExecResult(
           msg.command.intentId, "SUCCEEDED", "ok",
-          _session.token,
+          stopToken,
           SafetySupervisor::stateName(_robot->safetyState()),
           SafetySupervisor::faultName(_robot->safetyFault())
       ));
@@ -827,34 +875,18 @@ void WifiControl::update() {
     logEvent("WARN", "drive_watchdog");
   }
 
-  bool doPendingStop = false;
-  SafetyFault stopFault = SafetyFault::NONE;
-  portENTER_CRITICAL(&_queueMux);
-  if (_pendingStop) {
-    doPendingStop = true;
-    stopFault = _pendingStopFault;
-    _pendingStop = false;
-  }
-  portEXIT_CRITICAL(&_queueMux);
-
-  if (doPendingStop) {
-    if (stopFault == SafetyFault::NONE) {
-      RobotCommand stopCmd;
-      stopCmd.kind = CommandKind::STOP;
-      stopCmd.source = ControlSource::WIFI;
-      _router->execute(stopCmd);
-    } else {
-      _router->emergencyStop(stopFault);
-    }
-    portENTER_CRITICAL(&_stateMux);
-    _session.driveWatchdogStopped = true;
-    _session.lastActiveDriveMs = 0;
-    portEXIT_CRITICAL(&_stateMux);
-    broadcastTelemetry();
-  }
+  processPendingStop();
 
   QueuedCommand qc;
   while (dequeueCommand(qc)) {
+    portENTER_CRITICAL(&_queueMux);
+    const bool stopPending = _pendingStop;
+    portEXIT_CRITICAL(&_queueMux);
+    if (stopPending) {
+      processPendingStop();
+      break;
+    }
+
     bool sessionCurrent = false;
     bool superseded = false;
     const bool dispatchLocked = acquireDispatchLock();
@@ -928,7 +960,11 @@ void WifiControl::update() {
         terminalStatus = "ABORTED";
       }
 
+      char intentToken[WIFI_SESSION_TOKEN_HEX_CHARS + 1] = {};
       portENTER_CRITICAL(&_stateMux);
+      if (_session.active && _session.clientId == qc.clientId) {
+        strlcpy(intentToken, _session.token, sizeof(intentToken));
+      }
       for (size_t i = 0; i < WifiControllerSession::MAX_RECENT_INTENTS; ++i) {
         if (strcmp(_session.recentIntents[i].intentId, qc.command.intentId) == 0) {
           strlcpy(_session.recentIntents[i].status, terminalStatus, sizeof(_session.recentIntents[i].status));
@@ -939,7 +975,7 @@ void WifiControl::update() {
 
       _ws->text(qc.clientId, _protocol.generateExecResult(
           qc.command.intentId, terminalStatus, replyMsg,
-          _session.token,
+          intentToken,
           SafetySupervisor::stateName(_robot->safetyState()),
           SafetySupervisor::faultName(_robot->safetyFault())
       ));
@@ -947,6 +983,8 @@ void WifiControl::update() {
     
     if (executeIt) broadcastTelemetry();
   }
+
+  processPendingStop();
 
   if (now - _lastTelemetryMs > WIFI_TELEMETRY_INTERVAL_MS) {
     _lastTelemetryMs = now;
@@ -956,6 +994,7 @@ void WifiControl::update() {
   }
 }
 void WifiControl::broadcastTelemetry() {
+  if (!_robot || !_router || !_ws) return;
   RobotTelemetry t;
   t.revision = _router->currentEpoch();
   t.uptimeMs = millis();
