@@ -17,6 +17,11 @@ void ImuMonitor::update(uint32_t nowMs) {
     return;
   }
 
+  if (_reading.valid && _reading.sampleTimeMs > 0 &&
+      (nowMs - _reading.sampleTimeMs > IMU_MAX_SAMPLE_AGE_MS)) {
+    _reading.valid = false;
+  }
+
   if (nowMs - _lastSampleMs < IMU_SAMPLE_INTERVAL_MS) {
     return;
   }

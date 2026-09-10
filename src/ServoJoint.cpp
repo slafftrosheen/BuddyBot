@@ -70,7 +70,7 @@ void ServoJoint::update(uint32_t nowMs) {
   _lastUpdateMs = nowMs;
   
   _motion.update(nowMs);
-  moveTo(_motion.currentValue());
+  _internalMove(_motion.currentValue());
 }
 
 void ServoJoint::cancelMotion() {

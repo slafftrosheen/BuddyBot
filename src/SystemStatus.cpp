@@ -74,14 +74,16 @@ void SystemStatus::printStatus() const {
     }
   }
   
-  Serial.printf("wifi_running=%s\n", _wifiRunning ? "true" : "false");
-  if (_wifiRunning) {
-    Serial.printf("wifi_ssid=%s\n", _wifiSsid);
-    Serial.printf("wifi_ip=%s\n", _wifiIp);
+  WifiStatusSnapshot snap;
+  getWifiSnapshot(snap);
+  Serial.printf("wifi_running=%s\n", snap.running ? "true" : "false");
+  if (snap.running) {
+    Serial.printf("wifi_ssid=%s\n", snap.ssid);
+    Serial.printf("wifi_ip=%s\n", snap.ip);
   }
-  Serial.printf("wifi_clients=%u\n", _wifiClients);
-  Serial.printf("wifi_controller=%s\n", _wifiHasController ? "true" : "false");
-  Serial.printf("wifi_pairing_available=%s\n", _wifiPairingAvailable ? "true" : "false");
+  Serial.printf("wifi_clients=%u\n", snap.clients);
+  Serial.printf("wifi_controller=%s\n", snap.hasController ? "true" : "false");
+  Serial.printf("wifi_pairing_available=%s\n", snap.pairingAvailable ? "true" : "false");
   
   if (_diag) {
     Serial.printf("boot_diag_complete=%s\n", _diag->isComplete() ? "true" : "false");
@@ -119,17 +121,32 @@ void SystemStatus::printEvents() const {
 }
 
 void SystemStatus::setPairingCode(const char* code) {
+  lock();
   if (code) {
     strncpy(_pairingCode, code, sizeof(_pairingCode) - 1);
     _pairingCode[sizeof(_pairingCode) - 1] = '\0';
+  } else {
+    _pairingCode[0] = '\0';
   }
+  unlock();
 }
 
 void SystemStatus::clearPairingCode() {
+  lock();
   _pairingCode[0] = '\0';
+  unlock();
+}
+
+void SystemStatus::getPairingCode(char* out, size_t maxLen) const {
+  if (!out || maxLen == 0) return;
+  lock();
+  strncpy(out, _pairingCode, maxLen - 1);
+  out[maxLen - 1] = '\0';
+  unlock();
 }
 
 void SystemStatus::setWifiStatus(bool running, const char* ssid, const char* ip, uint8_t clients, bool hasController, bool pairingAvailable) {
+  lock();
   _wifiRunning = running;
   if (ssid) {
     strncpy(_wifiSsid, ssid, sizeof(_wifiSsid) - 1);
@@ -146,4 +163,56 @@ void SystemStatus::setWifiStatus(bool running, const char* ssid, const char* ip,
   _wifiClients = clients;
   _wifiHasController = hasController;
   _wifiPairingAvailable = pairingAvailable;
+  unlock();
+}
+
+void SystemStatus::getWifiSnapshot(WifiStatusSnapshot& out) const {
+  lock();
+  out.running = _wifiRunning;
+  strncpy(out.ssid, _wifiSsid, sizeof(out.ssid) - 1);
+  out.ssid[sizeof(out.ssid) - 1] = '\0';
+  strncpy(out.ip, _wifiIp, sizeof(out.ip) - 1);
+  out.ip[sizeof(out.ip) - 1] = '\0';
+  out.clients = _wifiClients;
+  out.hasController = _wifiHasController;
+  out.pairingAvailable = _wifiPairingAvailable;
+  strncpy(out.pairingCode, _pairingCode, sizeof(out.pairingCode) - 1);
+  out.pairingCode[sizeof(out.pairingCode) - 1] = '\0';
+  unlock();
+}
+
+bool SystemStatus::wifiRunning() const {
+  lock();
+  bool r = _wifiRunning;
+  unlock();
+  return r;
+}
+
+bool SystemStatus::wifiHasController() const {
+  lock();
+  bool r = _wifiHasController;
+  unlock();
+  return r;
+}
+
+bool SystemStatus::wifiPairingAvailable() const {
+  lock();
+  bool r = _wifiPairingAvailable;
+  unlock();
+  return r;
+}
+
+uint8_t SystemStatus::wifiClients() const {
+  lock();
+  uint8_t r = _wifiClients;
+  unlock();
+  return r;
+}
+
+const char* SystemStatus::wifiSsid() const {
+  return _wifiSsid;
+}
+
+const char* SystemStatus::wifiIp() const {
+  return _wifiIp;
 }

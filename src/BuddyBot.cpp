@@ -249,15 +249,16 @@ void loop() {
   rState.motorsArmed = armed;
   rState.motorAllowedByFirmware = ALLOW_MOTOR_ARMING;
   rState.driveMode = mode;
-  rState.wifiEnabled = systemStatus.wifiRunning();
-  rState.wifiControllerConnected = systemStatus.wifiHasController();
+  WifiStatusSnapshot wifiSnap;
+  systemStatus.getWifiSnapshot(wifiSnap);
+  rState.wifiEnabled = wifiSnap.running;
+  rState.wifiControllerConnected = wifiSnap.hasController;
   
-  const char* pairingCode = systemStatus.getPairingCode();
-  rState.pairingAvailable = systemStatus.wifiPairingAvailable() && (pairingCode && pairingCode[0] != '\0');
-  rState.pairingCode = pairingCode;
+  rState.pairingAvailable = wifiSnap.pairingAvailable && (wifiSnap.pairingCode[0] != '\0');
+  rState.pairingCode = wifiSnap.pairingCode;
   
-  rState.apSsid = systemStatus.wifiSsid();
-  rState.apIp = systemStatus.wifiIp();
+  rState.apSsid = wifiSnap.ssid;
+  rState.apIp = wifiSnap.ip;
   
   RangeReading rr = robot.rangeReading();
   rState.rangeValid = rr.valid;
