@@ -270,9 +270,8 @@ void RobotActions::updateCelebrate() {
   }
 
   if (_step == 1) {
-    if (!_hal->drive()) return;
     if (stepElapsed(400)) {
-      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+      if (_hal->drive() && _robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
         _robot->move(DriveMode::TURN_LEFT, 220, false, ControlSource::EXPRESSION);
       }
       nextStep();
@@ -281,9 +280,8 @@ void RobotActions::updateCelebrate() {
   }
 
   if (_step == 2) {
-    if (!_hal->drive()) return;
     if (stepElapsed(280)) {
-      if (_robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
+      if (_hal->drive() && _robot && ALLOW_ACTION_DRIVE_MOVEMENT) {
         _robot->move(DriveMode::TURN_RIGHT, 440, false, ControlSource::EXPRESSION);
       }
       nextStep();
@@ -362,7 +360,6 @@ void RobotActions::updateGreet() {
 
   if (_step == 1 && stepElapsed(300)) {
     // Manually transition to WAVE
-    ActionDrivePolicy prevPolicy = drivePolicy(_action);
     _action = ActionId::WAVE;
     _step = 0;
     _stepStartedMs = millis();

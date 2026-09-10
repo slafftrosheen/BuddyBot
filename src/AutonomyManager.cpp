@@ -33,7 +33,7 @@ bool AutonomyManager::update(RobotCommand& outCommand) {
     _state = AutonomyState::MONITORING;
   }
 
-  const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
+  const ObstacleSafetyStatus st = _robot->obstacleSafetyStatus();
   uint32_t now = millis();
 
   switch (_state) {

@@ -195,7 +195,6 @@ void RobotRenderer::drawMouth(int8_t openness, const RenderState& state) {
 void RobotRenderer::drawCheeks(uint8_t intensity, int bounce, const RenderState& state) {
   if (intensity > 0) {
     int cy = SCREEN_H / 2 - 10 + state.persona->eyeHeight / 2 + bounce;
-    uint16_t cColor = _canvas.color565(intensity, 0, intensity/2); // approximate mix
     _canvas.fillCircle(SCREEN_W / 2 - 45, cy, 4, state.persona->cheekColor);
     _canvas.fillCircle(SCREEN_W / 2 + 45, cy, 4, state.persona->cheekColor);
   } else if (state.persona->showFreckles) {

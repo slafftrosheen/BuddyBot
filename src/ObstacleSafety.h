@@ -29,12 +29,12 @@ enum class SafetyStopReason : uint8_t {
 };
 
 struct ObstacleSafetyStatus {
-  ObstacleSafetyState state;
-  SafetyStopReason lastStopReason;
-  uint32_t lastStopMs;
-  uint16_t filteredRangeMm;
-  bool rangeValid;
-  bool forwardMotionBlocked;
+  ObstacleSafetyState state = ObstacleSafetyState::SENSOR_UNAVAILABLE;
+  SafetyStopReason lastStopReason = SafetyStopReason::NONE;
+  uint32_t lastStopMs = 0;
+  uint16_t filteredRangeMm = 0;
+  bool rangeValid = false;
+  bool forwardMotionBlocked = true;
 };
 
 class ObstacleSafety {

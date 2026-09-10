@@ -14,6 +14,18 @@ void ExpressionEngine::begin() {
   _isDoubleBlink = false;
   _isMoving = false;
   _randomSeed = 12345;
+  
+  _eyeOpenLeft = 1.0f;
+  _eyeOpenRight = 1.0f;
+  _pupilOffsetX = 0;
+  _pupilOffsetY = 0;
+  _browTiltLeft = 0;
+  _browTiltRight = 0;
+  _mouthOpenness = 0;
+  _cheekIntensity = 0;
+  _shakeAmount = 0;
+  _bounceAmount = 0;
+  
   clear();
 }
 

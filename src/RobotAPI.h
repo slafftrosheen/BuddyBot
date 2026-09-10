@@ -74,7 +74,7 @@ public:
   void clearRememberedDriveCommand();
   uint32_t lastDriveCommandAtMs() const;
 
-  const ObstacleSafetyStatus& obstacleSafetyStatus() const;
+  ObstacleSafetyStatus obstacleSafetyStatus() const;
   bool forwardMotionAllowed() const;
   SafetyStopReason lastSafetyStopReason() const;
   void recordSafetyStop(SafetyStopReason reason);

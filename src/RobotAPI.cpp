@@ -417,6 +417,7 @@ void RobotAPI::action(ActionId actionId) {
   if (_safetySupervisor && !_safetySupervisor->mayMoveManipulators()) {
     return;
   }
+  if (!_actions) return;
   _actions->start(actionId);
   
   if (actionId == ActionId::WAVE) {
@@ -459,7 +460,7 @@ void RobotAPI::setAccessoryPosition(uint8_t index, bool active) {
 }
 
 RangeReading RobotAPI::rangeReading() const {
-  if (!_hal->range()) return {};
+  if (!_hal || !_hal->range()) return {};
   return _hal->range()->reading();
 }
 
@@ -468,6 +469,10 @@ bool RobotAPI::obstacleDetected() const {
 }
 
 const RobotBuildConfig& RobotAPI::buildConfig() const {
+  if (!_hal) {
+    static const RobotBuildConfig empty{};
+    return empty;
+  }
   return _hal->buildConfig();
 }
 
@@ -507,10 +512,8 @@ uint32_t RobotAPI::lastDriveCommandAtMs() const {
   return _hasSavedCmd ? _lastManualDriveCmdMs : 0;
 }
 
-const ObstacleSafetyStatus& RobotAPI::obstacleSafetyStatus() const {
-  static ObstacleSafetyStatus _statusCache;
-  _statusCache = _safety.status();
-  return _statusCache;
+ObstacleSafetyStatus RobotAPI::obstacleSafetyStatus() const {
+  return _safety.status();
 }
 
 bool RobotAPI::forwardMotionAllowed() const {

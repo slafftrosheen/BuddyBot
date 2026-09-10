@@ -313,11 +313,6 @@ bool WebControlProtocol::parseCommand(
       error = WebProtocolError::UNKNOWN_TYPE;
       return false;
   }
-  
-  // Parse intentId if present (applicable to any semantic command)
-  if (doc["intentId"].is<const char*>()) {
-    strlcpy(out.command.intentId, doc["intentId"].as<const char*>(), sizeof(out.command.intentId));
-  }
 }
 
 DriveMode WebControlProtocol::parseDriveMode(const char* str) {
@@ -429,7 +424,6 @@ String WebControlProtocol::generateTelemetry(const RobotTelemetry& t) {
   if (t.safetyFault) doc["safetyFault"] = t.safetyFault;
   doc["safetyStateChangedMs"] = t.safetyStateChangedMs;
   doc["forwardMotionBlocked"] = t.forwardMotionBlocked;
-  doc["actionRunning"] = t.actionRunning;
   doc["imuAvailable"] = t.imuAvailable;
   doc["imuValid"] = t.imuValid;
   if (t.imuValid) {

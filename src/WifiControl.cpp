@@ -843,7 +843,7 @@ void WifiControl::update() {
         if (!ok && qc.command.kind == CommandKind::MOVE) {
           if (_robot) {
             const SafetyFault fault = _robot->safetyFault();
-            const ObstacleSafetyStatus& obstacle = _robot->obstacleSafetyStatus();
+            const ObstacleSafetyStatus obstacle = _robot->obstacleSafetyStatus();
             if (qc.command.driveMode == DriveMode::FORWARD &&
                 obstacle.forwardMotionBlocked) {
               replyMsg = obstacle.rangeValid ? "obstacle_blocked" : "sensor_unavailable";
@@ -997,7 +997,7 @@ void WifiControl::broadcastTelemetry() {
   t.firmwareVersion = id.version;
   t.firmwareChannel = id.channel;
   
-  const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
+  const ObstacleSafetyStatus st = _robot->obstacleSafetyStatus();
   t.lastSafetyStopMs = st.lastStopMs;
   switch (st.lastStopReason) {
     case SafetyStopReason::NONE: t.lastSafetyStopReason = "none"; break;

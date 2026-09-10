@@ -20,7 +20,7 @@ SafetyInputs ControlRouter::buildSafetyInputs() const {
     return inputs;
   }
 
-  const ObstacleSafetyStatus& obstacle = _robot->obstacleSafetyStatus();
+  const ObstacleSafetyStatus obstacle = _robot->obstacleSafetyStatus();
   inputs.rangeValid = obstacle.rangeValid;
   inputs.forwardMotionBlocked = obstacle.forwardMotionBlocked;
 
@@ -394,7 +394,7 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
     }
 
     case CommandKind::CTRL_SAFETY_STATUS: {
-      const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
+      const ObstacleSafetyStatus st = _robot->obstacleSafetyStatus();
       const char* sStr = "unknown";
       switch(st.state) {
         case ObstacleSafetyState::CLEAR: sStr = "CLEAR"; break;
@@ -434,7 +434,7 @@ bool ControlRouter::execute(const RobotCommand& cmd) {
       Serial.printf("autonomy_mode=%s\n", _robot->autonomyEnabled() ? "ASSISTED_AVOIDANCE" : "OFF");
       // AutonomyManager state is separate, we'd need to expose it through RobotAPI or just print this
       Serial.printf("autonomy_enabled=%s\n", _robot->autonomyEnabled() ? "true" : "false");
-      const ObstacleSafetyStatus& st = _robot->obstacleSafetyStatus();
+      const ObstacleSafetyStatus st = _robot->obstacleSafetyStatus();
       bool ready = _robot->autonomyMotionAllowed();
       Serial.printf("prerequisites_met=%s\n", ready ? "true" : "false");
       return true;
