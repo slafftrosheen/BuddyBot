@@ -151,12 +151,12 @@ bool WebControlProtocol::parseCommand(
   }
 
   static const char* const queryFields[] = {"v", "id", "type", "token"};
-  static const char* const handshakeFields[] = {"v", "id", "type", "token"};
+  static const char* const controlQueryFields[] = {"v", "id", "type", "token", "intentId"};
   static const char* const pairFields[] = {"v", "id", "type", "code"};
-  static const char* const moveFields[] = {"v", "id", "type", "token", "mode", "durationMs"};
-  static const char* const actionFields[] = {"v", "id", "type", "token", "action"};
-  static const char* const moodFields[] = {"v", "id", "type", "token", "mood"};
-  static const char* const accessoryFields[] = {"v", "id", "type", "token", "index", "active"};
+  static const char* const moveFields[] = {"v", "id", "type", "token", "mode", "durationMs", "intentId"};
+  static const char* const actionFields[] = {"v", "id", "type", "token", "action", "intentId"};
+  static const char* const moodFields[] = {"v", "id", "type", "token", "mood", "intentId"};
+  static const char* const accessoryFields[] = {"v", "id", "type", "token", "index", "active", "intentId"};
 
   const JsonObjectConst object = doc.as<JsonObjectConst>();
   bool validSchema = false;
@@ -164,13 +164,15 @@ bool WebControlProtocol::parseCommand(
     case WebMessageType::HELLO:
     case WebMessageType::PING:
     case WebMessageType::STATUS:
+    case WebMessageType::STATE:
+    case WebMessageType::HANDSHAKE:
+      validSchema = hasOnlyFields(object, queryFields, sizeof(queryFields) / sizeof(queryFields[0]));
+      break;
     case WebMessageType::STOP:
     case WebMessageType::ARM:
     case WebMessageType::DISARM:
     case WebMessageType::PERSONA_NEXT:
-    case WebMessageType::STATE:
-    case WebMessageType::HANDSHAKE:
-      validSchema = hasOnlyFields(object, queryFields, sizeof(queryFields) / sizeof(queryFields[0]));
+      validSchema = hasOnlyFields(object, controlQueryFields, sizeof(controlQueryFields) / sizeof(controlQueryFields[0]));
       break;
     case WebMessageType::PAIR:
       validSchema = hasOnlyFields(object, pairFields, sizeof(pairFields) / sizeof(pairFields[0]));
@@ -191,6 +193,20 @@ bool WebControlProtocol::parseCommand(
       break;
   }
   if (!validSchema) {
+    error = WebProtocolError::INVALID_ARGUMENT;
+    return false;
+  }
+
+  if (doc["intentId"].is<const char*>()) {
+    const char* iId = doc["intentId"].as<const char*>();
+    size_t iLen = strlen(iId);
+    if (iLen > 0 && iLen < sizeof(out.command.intentId)) {
+      strlcpy(out.command.intentId, iId, sizeof(out.command.intentId));
+    } else {
+      error = WebProtocolError::INVALID_ARGUMENT;
+      return false;
+    }
+  } else if (!doc["intentId"].isNull()) {
     error = WebProtocolError::INVALID_ARGUMENT;
     return false;
   }
@@ -365,6 +381,19 @@ String WebControlProtocol::generateAck(uint32_t msgId, bool ok, const String& co
   return out;
 }
 
+String WebControlProtocol::generateHandshakeAck(uint32_t msgId, uint32_t revision, const char* robotName) {
+  JsonDocument doc;
+  doc["type"] = "handshake_ack";
+  if (msgId > 0) doc["id"] = msgId;
+  doc["ok"] = true;
+  doc["v"] = CONTROL_PROTOCOL_VERSION;
+  doc["robot"] = robotName;
+  doc["revision"] = revision;
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
 String WebControlProtocol::generateError(uint32_t msgId, const String& code) {
   JsonDocument doc;
   doc["type"] = "error";
@@ -441,6 +470,13 @@ String WebControlProtocol::generateTelemetry(const RobotTelemetry& t) {
   doc["configSchemaVersion"] = t.configSchemaVersion;
   doc["hardwareManifestVersion"] = t.hardwareManifestVersion;
   doc["safetyPolicyVersion"] = t.safetyPolicyVersion;
+
+  if (t.batteryValid) {
+    doc["batteryPercent"] = t.batteryPercent;
+  } else {
+    doc["batteryPercent"] = (char*)nullptr;
+  }
+  doc["batteryValid"] = t.batteryValid;
 
   String out;
   serializeJson(doc, out);

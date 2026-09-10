@@ -565,6 +565,22 @@ bool RobotAPI::mayMoveManipulators() const {
   return _safetySupervisor->mayMoveManipulators();
 }
 
+uint8_t RobotAPI::batteryPercent() const {
+#if defined(ARDUINO) && !defined(UNIT_TEST)
+  return M5.Power.getBatteryLevel();
+#else
+  return 100;
+#endif
+}
+
+bool RobotAPI::batteryValid() const {
+#if defined(ARDUINO) && !defined(UNIT_TEST)
+  return true;
+#else
+  return false;
+#endif
+}
+
 ServoDiagnostics* RobotAPI::diagnostics() {
   return &_diagnostics;
 }

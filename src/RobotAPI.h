@@ -88,6 +88,9 @@ public:
   bool mayEnableDrive() const;
   bool mayMoveManipulators() const;
 
+  uint8_t batteryPercent() const;
+  bool batteryValid() const;
+
   ServoDiagnostics* diagnostics();
 
 private:

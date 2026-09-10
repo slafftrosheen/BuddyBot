@@ -172,6 +172,66 @@ void test_web_state_serialization() {
   TEST_ASSERT_TRUE(json.indexOf("\"servoBusPresent\":true") >= 0);
 }
 
+void test_web_intent_id_is_parsed() {
+  WebControlProtocol protocol;
+  WebParsedMessage message = {};
+  WebProtocolError error = WebProtocolError::NONE;
+  const char payload[] = R"({"v":1,"id":1,"type":"move","mode":"forward","durationMs":200,"token":"0123456789abcdef0123456789abcdef","intentId":"intent-xyz-123"})";
+
+  TEST_ASSERT_TRUE(protocol.parseCommand(reinterpret_cast<const uint8_t*>(payload), strlen(payload), message, error));
+  TEST_ASSERT_EQUAL_STRING("intent-xyz-123", message.command.intentId);
+
+  // Also test STOP with intentId
+  const char stopPayload[] = R"({"v":1,"id":2,"type":"stop","intentId":"intent-stop-999"})";
+  message = {};
+  TEST_ASSERT_TRUE(protocol.parseCommand(reinterpret_cast<const uint8_t*>(stopPayload), strlen(stopPayload), message, error));
+  TEST_ASSERT_EQUAL_STRING("intent-stop-999", message.command.intentId);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(CommandKind::STOP), static_cast<uint8_t>(message.command.kind));
+}
+
+void test_web_handshake_ack_generation() {
+  WebControlProtocol protocol;
+  String json = protocol.generateHandshakeAck(42, 100, "BuddyBot");
+
+  TEST_ASSERT_TRUE(json.indexOf("\"type\":\"handshake_ack\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"id\":42") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"ok\":true") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"robot\":\"BuddyBot\"") >= 0);
+}
+
+void test_web_telemetry_generation() {
+  WebControlProtocol protocol;
+  RobotTelemetry t;
+  t.revision = 55;
+  t.uptimeMs = 123456;
+  t.motorsArmed = true;
+  t.rangeMm = 450;
+  t.rangeValid = true;
+  t.obstacleDetected = false;
+  t.safetyState = "ARMED";
+  t.safetyFault = "NONE";
+  t.driveModeName = "forward";
+  t.actionName = "wave";
+  t.moodName = "happy";
+  t.batteryPercent = 88;
+  t.batteryValid = true;
+
+  String json = protocol.generateTelemetry(t);
+
+  TEST_ASSERT_TRUE(json.indexOf("\"type\":\"telemetry\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"revision\":55") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"uptimeMs\":123456") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"motorsArmed\":true") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"rangeMm\":450") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"rangeValid\":true") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"safetyState\":\"ARMED\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"driveModeName\":\"forward\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"actionName\":\"wave\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"moodName\":\"happy\"") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"batteryPercent\":88") >= 0);
+  TEST_ASSERT_TRUE(json.indexOf("\"batteryValid\":true") >= 0);
+}
+
 void setup() {
   UNITY_BEGIN();
   RUN_TEST(test_serial_pipe_move_is_parsed);
@@ -186,6 +246,9 @@ void setup() {
   RUN_TEST(test_web_parser_rejects_invalid_mood_and_pairing_suffix);
   RUN_TEST(test_web_state_parsing);
   RUN_TEST(test_web_state_serialization);
+  RUN_TEST(test_web_intent_id_is_parsed);
+  RUN_TEST(test_web_handshake_ack_generation);
+  RUN_TEST(test_web_telemetry_generation);
   UNITY_END();
 }
 

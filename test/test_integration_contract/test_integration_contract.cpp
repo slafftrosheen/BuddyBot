@@ -44,7 +44,7 @@ static SafetySupervisor* s_robotSafety = nullptr;
 static bool s_mockArmResult = true;
 
 bool RobotAPI::driveAvailable() const { return true; }
-const ObstacleSafetyStatus& RobotAPI::obstacleSafetyStatus() const { static ObstacleSafetyStatus s; return s; }
+ObstacleSafetyStatus RobotAPI::obstacleSafetyStatus() const { static ObstacleSafetyStatus s; return s; }
 const ImuReading& RobotAPI::imuReading() const { static ImuReading r; r.available = true; r.valid = true; return r; }
 void RobotAPI::setAutonomyEnabled(bool) {}
 void RobotAPI::disarmMotors() {}
@@ -82,6 +82,8 @@ SafetyFault RobotAPI::safetyFault() const { return s_robotSafety ? s_robotSafety
 bool RobotAPI::mayEnableDrive() const { return s_robotSafety ? s_robotSafety->mayEnableDrive() : false; }
 bool RobotAPI::mayMoveManipulators() const { return s_robotSafety ? s_robotSafety->mayMoveManipulators() : false; }
 ActuatorCapabilities RobotAPI::actuatorCapabilities() const { return ActuatorCapabilities{}; }
+uint8_t RobotAPI::batteryPercent() const { return 90; }
+bool RobotAPI::batteryValid() const { return true; }
 void RobotAPI::setSafetySupervisor(SafetySupervisor* s) { s_robotSafety = s; }
 
 // Finally include ControlRouter cpp and EmbodimentGateway cpp

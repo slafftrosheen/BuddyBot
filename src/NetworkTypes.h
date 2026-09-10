@@ -57,4 +57,7 @@ struct RobotTelemetry {
   uint16_t configSchemaVersion = 0;
   uint16_t hardwareManifestVersion = 0;
   uint16_t safetyPolicyVersion = 0;
+
+  uint8_t batteryPercent = 0;
+  bool batteryValid = false;
 };

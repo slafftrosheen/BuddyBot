@@ -73,6 +73,7 @@ public:
   const char* webMessageTypeName(WebMessageType type) const;
 
   String generateAck(uint32_t msgId, bool ok, const String& codeOrMessage, uint32_t revision);
+  String generateHandshakeAck(uint32_t msgId, uint32_t revision, const char* robotName = "BuddyBot");
   String generateError(uint32_t msgId, const String& code);
   String generateTelemetry(const RobotTelemetry& t);
   String generateEventLog(const EventLogEntry* entries, size_t count);

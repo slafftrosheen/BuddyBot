@@ -16,6 +16,8 @@ ActuatorCapabilities RobotAPI::actuatorCapabilities() const { return ActuatorCap
 bool RobotAPI::mayMoveManipulators() const { return false; }
 bool RobotAPI::autonomyEnabled() const { return false; }
 bool RobotAPI::autonomyMotionAllowed() const { return false; }
+uint8_t RobotAPI::batteryPercent() const { return 90; }
+bool RobotAPI::batteryValid() const { return true; }
 void RobotAPI::setSafetySupervisor(SafetySupervisor* supervisor) { _safetySupervisor = supervisor; }
 
 SafetySupervisor safety;

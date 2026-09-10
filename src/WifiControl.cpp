@@ -527,7 +527,11 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
 
       refreshControllerLease(clientId, sessionGeneration, now);
     }
-    _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
+    if (msg.type == WebMessageType::HANDSHAKE) {
+      _ws->text(clientId, _protocol.generateHandshakeAck(msg.requestId, _router->currentEpoch(), FIRMWARE_NAME));
+    } else {
+      _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
+    }
     sendEvents(clientId);
     return;
   }
@@ -647,14 +651,38 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     controllerOwned = _session.active && _session.clientId == clientId;
     portEXIT_CRITICAL(&_stateMux);
     if (!controllerOwned) {
+      if (msg.command.intentId[0] != '\0') {
+        _ws->text(clientId, _protocol.generateExecResult(
+            msg.command.intentId, "REJECTED", "not_controller",
+            _session.token,
+            SafetySupervisor::stateName(_robot->safetyState()),
+            SafetySupervisor::faultName(_robot->safetyFault())
+        ));
+      }
       _ws->text(clientId, _protocol.generateError(msg.requestId, "not_controller"));
       return;
     }
     if (!controllerMatches(clientId, msg, &sessionGeneration)) {
+      if (msg.command.intentId[0] != '\0') {
+        _ws->text(clientId, _protocol.generateExecResult(
+            msg.command.intentId, "REJECTED", "bad_token",
+            _session.token,
+            SafetySupervisor::stateName(_robot->safetyState()),
+            SafetySupervisor::faultName(_robot->safetyFault())
+        ));
+      }
       _ws->text(clientId, _protocol.generateError(msg.requestId, "bad_token"));
       return;
     }
     if (!acceptRequestId(msg.requestId, sessionGeneration)) {
+      if (msg.command.intentId[0] != '\0') {
+        _ws->text(clientId, _protocol.generateExecResult(
+            msg.command.intentId, "REJECTED", "replayed_command",
+            _session.token,
+            SafetySupervisor::stateName(_robot->safetyState()),
+            SafetySupervisor::faultName(_robot->safetyFault())
+        ));
+      }
       _ws->text(clientId, _protocol.generateError(msg.requestId, "replayed_command"));
       return;
     }
@@ -734,6 +762,14 @@ void WifiControl::handleWebSocketMessage(void* arg, uint8_t* data, size_t len, u
     }
     requestEmergencyStopFromWifi(clientId, SafetyFault::NONE);
     releaseDispatchLock();
+    if (msg.command.intentId[0] != '\0') {
+      _ws->text(clientId, _protocol.generateExecResult(
+          msg.command.intentId, "SUCCEEDED", "ok",
+          _session.token,
+          SafetySupervisor::stateName(_robot->safetyState()),
+          SafetySupervisor::faultName(_robot->safetyFault())
+      ));
+    }
     if (msg.hasRequestId) {
       _ws->text(clientId, _protocol.generateAck(msg.requestId, true, "ok", _router->currentEpoch()));
     }
@@ -945,6 +981,8 @@ void WifiControl::broadcastTelemetry() {
     t.safetyState = SafetySupervisor::stateName(_robot->safetyState());
     t.safetyFault = SafetySupervisor::faultName(_robot->safetyFault());
     t.safetyStateChangedMs = _robot->safetyStateChangedAtMs();
+    t.batteryPercent = _robot->batteryPercent();
+    t.batteryValid = _robot->batteryValid();
   }
   
   t.driveMode = DriveMode::STOPPED;
